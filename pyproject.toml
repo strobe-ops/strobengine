@@ -1,0 +1,23 @@
+[project]
+name = "strobengine"
+version = "0.1.0"
+description = "A load testing framework with a Python UI and a bare-metal Rust engine core."
+readme = "README.md"
+authors = [
+    { name = "riccione", email = "28346232+riccione@users.noreply.github.com" }
+]
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.maturin]
+features = ["pyo3/extension-module"]
+module-name = "strobengine._strobengine"
+python-packages = ["strobengine"]
+python-source = "src"
+
+[tool.uv]
+cache-keys = [{ file = "pyproject.toml" }, { file = "src/**/*.rs" }, { file = "Cargo.toml" }, { file = "Cargo.lock" }]
+
+[build-system]
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"
