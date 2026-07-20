@@ -79,5 +79,6 @@ fn run_load_test(
 fn _strobengine(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(run_load_test, m)?)?;
     m.add_class::<config::TestConfig>()?;
+    m.add_class::<metrics::TestSummary>()?;
     Ok(())
 }
