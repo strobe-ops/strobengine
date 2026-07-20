@@ -1,6 +1,9 @@
 #[allow(dead_code)]
 mod metrics;
 
+#[allow(dead_code)]
+mod worker;
+
 use pyo3::prelude::*;
 
 /// A Python module implemented in Rust. The name of this module must match
