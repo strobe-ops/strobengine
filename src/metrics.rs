@@ -1,5 +1,6 @@
 use std::sync::atomic::AtomicUsize;
 
+#[allow(dead_code)]
 pub struct RequestMetric {
     pub status_code: u16,
     pub latency_micros: u128,
