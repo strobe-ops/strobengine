@@ -1,3 +1,4 @@
+mod config;
 mod metrics;
 mod worker;
 
@@ -77,5 +78,6 @@ fn run_load_test(
 #[pymodule]
 fn _strobengine(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(run_load_test, m)?)?;
+    m.add_class::<config::TestConfig>()?;
     Ok(())
 }
