@@ -38,7 +38,6 @@ pub struct TestSummary {
     pub p99_latency_ms: f64,
 }
 
-#[allow(dead_code)]
 pub fn calculate_summary(total: usize, errors: usize, mut latencies: Vec<u128>) -> TestSummary {
     if latencies.is_empty() {
         return TestSummary {

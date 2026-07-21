@@ -8,16 +8,17 @@ use std::time::Duration;
 
 use pyo3::prelude::*;
 
+use crate::config::TestConfig;
 use crate::metrics::{LiveCounters, RequestMetric};
 
 #[pyfunction]
-fn run_load_test(
-    py: Python<'_>,
-    url: String,
-    concurrency: usize,
-    duration_secs: u64,
-) -> PyResult<(usize, usize, Vec<u128>)> {
+fn run_load_test(py: Python<'_>, config: TestConfig) -> PyResult<metrics::TestSummary> {
     py.detach(move || {
+        let url = config.url;
+        let concurrency = config.concurrency;
+        let duration_secs = config.duration_secs;
+        let timeout_secs = config.timeout_secs;
+
         let rt = tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .build()
@@ -26,6 +27,7 @@ fn run_load_test(
         rt.block_on(async move {
             let client = reqwest::Client::builder()
                 .pool_max_idle_per_host(concurrency)
+                .timeout(Duration::from_secs(timeout_secs))
                 .build()
                 .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
 
@@ -67,7 +69,7 @@ fn run_load_test(
             let total = counters.total_requests.load(Ordering::Relaxed);
             let errors = counters.errors.load(Ordering::Relaxed);
 
-            Ok((total, errors, latencies))
+            Ok(metrics::calculate_summary(total, errors, latencies))
         })
     })
 }

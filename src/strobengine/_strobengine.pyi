@@ -1,7 +1,3 @@
-from typing import List, Tuple
-
-def run_load_test(url: str, concurrency: int, duration_secs: int) -> Tuple[int, int, List[int]]: ...
-
 class TestConfig:
     url: str
     concurrency: int
@@ -26,3 +22,5 @@ class TestSummary:
     def p95_latency_ms(self) -> float: ...
     @property
     def p99_latency_ms(self) -> float: ...
+
+def run_load_test(config: TestConfig) -> TestSummary: ...
