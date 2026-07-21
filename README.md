@@ -65,6 +65,19 @@ uv sync --extra rich
 
 Without `rich`, `print_summary` falls back to clean plain-text formatting.
 
+## CLI Usage
+
+```bash
+# Basic load test
+strobengine http://localhost:8080/api/health
+
+# Custom parameters
+strobengine http://localhost:8080/api/health -c 50 -d 30 -t 5
+
+# JSON output for CI/CD
+strobengine http://localhost:8080/api/health --json
+```
+
 ## Architecture
 
 strobengine separates configuration, execution, and metrics into clean Rust modules, exposed to Python via PyO3:
