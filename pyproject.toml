@@ -9,6 +9,9 @@ authors = [
 requires-python = ">=3.11"
 dependencies = []
 
+[project.optional-dependencies]
+rich = ["rich>=13.0"]
+
 [tool.maturin]
 features = ["pyo3/extension-module"]
 module-name = "strobengine._strobengine"
