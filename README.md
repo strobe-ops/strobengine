@@ -65,6 +65,33 @@ uv sync --extra rich
 
 Without `rich`, `print_summary` falls back to clean plain-text formatting.
 
+## CLI Usage
+
+```bash
+strobengine http://localhost:8080/api/health
+```
+
+By default, this spawns **10 concurrent workers** for **10 seconds** with a **10-second request timeout**. Results are displayed as a formatted table with total requests, errors, requests/sec, and latency percentiles (avg, p95, p99).
+
+### Options
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-c`, `--concurrency` | `10` | Number of concurrent workers |
+| `-d`, `--duration` | `10` | Test duration in seconds |
+| `-t`, `--timeout` | `10` | Per-request timeout in seconds |
+| `--json` | off | Output raw JSON instead of formatted table |
+
+### Examples
+
+```bash
+# 50 concurrent workers for 30 seconds
+strobengine http://localhost:8080/api/health -c 50 -d 30
+
+# JSON output for CI/CD pipelines
+strobengine http://localhost:8080/api/health --json
+```
+
 ## Architecture
 
 strobengine separates configuration, execution, and metrics into clean Rust modules, exposed to Python via PyO3:

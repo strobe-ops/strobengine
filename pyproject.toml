@@ -9,6 +9,9 @@ authors = [
 requires-python = ">=3.11"
 dependencies = []
 
+[project.scripts]
+strobengine = "strobengine.cli:main"
+
 [project.optional-dependencies]
 rich = ["rich>=13.0"]
 
