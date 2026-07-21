@@ -26,3 +26,35 @@ impl TestConfig {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn new_with_defaults() {
+        let c = TestConfig::new("http://example.com".into(), 10, 10, 10);
+        assert_eq!(c.url, "http://example.com");
+        assert_eq!(c.concurrency, 10);
+        assert_eq!(c.duration_secs, 10);
+        assert_eq!(c.timeout_secs, 10);
+    }
+
+    #[test]
+    fn new_with_custom_values() {
+        let c = TestConfig::new("http://test.io".into(), 50, 30, 5);
+        assert_eq!(c.url, "http://test.io");
+        assert_eq!(c.concurrency, 50);
+        assert_eq!(c.duration_secs, 30);
+        assert_eq!(c.timeout_secs, 5);
+    }
+
+    #[test]
+    fn fields_are_gettable() {
+        let c = TestConfig::new("http://a.com".into(), 1, 2, 3);
+        assert_eq!(c.url, "http://a.com");
+        assert_eq!(c.concurrency, 1);
+        assert_eq!(c.duration_secs, 2);
+        assert_eq!(c.timeout_secs, 3);
+    }
+}
