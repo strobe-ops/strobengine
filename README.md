@@ -102,15 +102,29 @@ strobengine separates configuration, execution, and metrics into clean Rust modu
 
 The Python GIL is released entirely via `py.detach()` during test execution, allowing the full Tokio thread pool to run concurrently without throttling Python.
 
+## Testing
+
+Run the full test suite with:
+
+```bash
+# Rust unit tests
+cargo test
+
+# Python unit tests
+uv run pytest -v
+```
+
 ## How to Contribute
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feat/my-feature`)
 3. Make your changes
-4. Run formatting and linting:
+4. Run formatting, linting, and tests:
    ```bash
    cargo fmt
    cargo clippy --all-targets -- -D warnings
+   cargo test
+   uv run pytest -v
    ```
 5. Commit your changes following [Conventional Commits](https://www.conventionalcommits.org/)
 6. Push to your branch and open a Pull Request
