@@ -68,13 +68,27 @@ Without `rich`, `print_summary` falls back to clean plain-text formatting.
 ## CLI Usage
 
 ```bash
-# Basic load test
 strobengine http://localhost:8080/api/health
+```
 
-# Custom parameters
-strobengine http://localhost:8080/api/health -c 50 -d 30 -t 5
+By default, this spawns **10 concurrent workers** for **10 seconds** with a **10-second request timeout**. Results are displayed as a formatted table with total requests, errors, requests/sec, and latency percentiles (avg, p95, p99).
 
-# JSON output for CI/CD
+### Options
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-c`, `--concurrency` | `10` | Number of concurrent workers |
+| `-d`, `--duration` | `10` | Test duration in seconds |
+| `-t`, `--timeout` | `10` | Per-request timeout in seconds |
+| `--json` | off | Output raw JSON instead of formatted table |
+
+### Examples
+
+```bash
+# 50 concurrent workers for 30 seconds
+strobengine http://localhost:8080/api/health -c 50 -d 30
+
+# JSON output for CI/CD pipelines
 strobengine http://localhost:8080/api/health --json
 ```
 
