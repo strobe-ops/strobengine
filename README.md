@@ -32,26 +32,38 @@ uv sync
 ## Quick Start Usage
 
 ```python
-from strobengine import TestConfig, run_load_test
+from strobengine import StrobEngine, print_summary
 
-# Configure the load test
-config = TestConfig(
+# Create the engine
+engine = StrobEngine(
     url="http://localhost:8080/api/health",
     concurrency=50,
-    duration_secs=30,
-    timeout_secs=5,
+    duration=30,
+    timeout=5,
 )
 
 # Run the test — Python GIL is released during execution
-summary = run_load_test(config)
+summary = engine.run()
 
-# Print results
-print(f"Total requests:  {summary.total_requests}")
-print(f"Total errors:    {summary.total_errors}")
-print(f"Average latency: {summary.average_latency_ms:.2f} ms")
-print(f"p95 latency:     {summary.p95_latency_ms:.2f} ms")
-print(f"p99 latency:     {summary.p99_latency_ms:.2f} ms")
+# Print a formatted summary
+print_summary(summary, url=engine.config.url, duration_secs=30)
 ```
+
+For async contexts (FastAPI, Typer, etc.):
+
+```python
+summary = await engine.run_async()
+```
+
+### Pretty output with Rich
+
+Install the optional `rich` dependency for colorized table output:
+
+```bash
+uv sync --extra rich
+```
+
+Without `rich`, `print_summary` falls back to clean plain-text formatting.
 
 ## Architecture
 
