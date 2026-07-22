@@ -7,13 +7,13 @@ authors = [
     { name = "riccione", email = "28346232+riccione@users.noreply.github.com" }
 ]
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    "rich>=13.0.0",
+    "typer>=0.27.0",
+]
 
 [project.scripts]
 strobengine = "strobengine.cli:main"
-
-[project.optional-dependencies]
-rich = ["rich>=13.0"]
 
 [tool.maturin]
 features = ["pyo3/extension-module"]
