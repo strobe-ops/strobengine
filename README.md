@@ -16,6 +16,8 @@ A high-performance HTTP load testing engine with a Python API and a bare-metal R
 | reqwest | 0.13 | HTTP client with connection pooling |
 | tokio | 1.53 | Multi-threaded async runtime |
 | tokio-util | 0.7 | CancellationToken for graceful worker shutdown |
+| tracing | 0.1 | Structured logging instrumentation |
+| tracing-subscriber | 0.3 | Log formatting and output (stderr/file) |
 
 ## Installation & Compilation
 
@@ -121,6 +123,21 @@ By default, this spawns **10 concurrent workers** for **10 seconds** with a **10
 | `--post-spike` | `5` | Post-spike duration in seconds |
 | `-t`, `--timeout` | `10` | Per-request timeout in seconds |
 | `--json` | off | Output raw JSON |
+
+### Global Options
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-v`, `-vv`, `-vvv` | warn | Increase verbosity (INFO, DEBUG, TRACE) |
+| `-q`, `--quiet` | off | Suppress all output |
+| `--log-file <path>` | none | Write logs to file |
+| `-V`, `--version` | off | Show version and exit |
+
+Logs stream to **stderr** by default, keeping stdout clean for JSON output piping:
+
+```bash
+strobengine load http://localhost:8080/api/health -vv --json > results.json
+```
 
 ## Architecture
 
