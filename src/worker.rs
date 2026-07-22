@@ -2,6 +2,8 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
+use tokio_util::sync::CancellationToken;
+
 use crate::metrics::{LiveCounters, RequestMetric};
 
 pub async fn worker_loop(
@@ -10,10 +12,11 @@ pub async fn worker_loop(
     counters: Arc<LiveCounters>,
     tx: tokio::sync::mpsc::Sender<RequestMetric>,
     duration: Duration,
+    token: CancellationToken,
 ) {
     let start = Instant::now();
 
-    while start.elapsed() < duration {
+    while start.elapsed() < duration && !token.is_cancelled() {
         counters.total_requests.fetch_add(1, Ordering::Relaxed);
 
         let req_start = Instant::now();
