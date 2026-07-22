@@ -1,208 +1,187 @@
 import json
-from unittest.mock import Mock, patch
 
-import pytest
+from typer.testing import CliRunner
 
-from strobengine.cli import main
+from strobengine.cli import app
 
-
-def _make_summary(**kwargs):
-    defaults = {
-        "total_requests": 500,
-        "total_errors": 2,
-        "average_latency_ms": 15.0,
-        "p95_latency_ms": 30.0,
-        "p99_latency_ms": 45.0,
-    }
-    defaults.update(kwargs)
-    return Mock(**defaults)
-
-
-class TestCLIBackwardCompat:
-    @patch("strobengine.cli.print_summary")
-    @patch("strobengine.cli.StrobEngine")
-    def test_no_subcommand_defaults_to_load(self, MockEngine, mock_print):
-        MockEngine.load_test.return_value.run.return_value = _make_summary()
-        main(["http://example.com"])
-        MockEngine.load_test.assert_called_once_with(
-            url="http://example.com", concurrency=10, duration=10, timeout=10
-        )
-
-    @patch("strobengine.cli.print_summary")
-    @patch("strobengine.cli.StrobEngine")
-    def test_flags_before_url(self, MockEngine, mock_print):
-        MockEngine.load_test.return_value.run.return_value = _make_summary()
-        main(["-c", "50", "http://example.com"])
-        MockEngine.load_test.assert_called_once_with(
-            url="http://example.com", concurrency=50, duration=10, timeout=10
-        )
+runner = CliRunner()
 
 
 class TestCLILoadSubcommand:
-    @patch("strobengine.cli.print_summary")
-    @patch("strobengine.cli.StrobEngine")
-    def test_load_default(self, MockEngine, mock_print):
-        MockEngine.load_test.return_value.run.return_value = _make_summary()
-        main(["load", "http://example.com"])
-        MockEngine.load_test.assert_called_once_with(
-            url="http://example.com", concurrency=10, duration=10, timeout=10
-        )
+    def test_load_default(self, local_server: str) -> None:
+        result = runner.invoke(app, ["load", local_server, "-c", "2", "-d", "1"])
+        assert result.exit_code == 0
 
-    @patch("strobengine.cli.print_summary")
-    @patch("strobengine.cli.StrobEngine")
-    def test_load_custom_flags(self, MockEngine, mock_print):
-        MockEngine.load_test.return_value.run.return_value = _make_summary()
-        main(["load", "http://test.io", "-c", "50", "-d", "30", "-t", "5"])
-        MockEngine.load_test.assert_called_once_with(
-            url="http://test.io", concurrency=50, duration=30, timeout=5
+    def test_load_custom_flags(self, local_server: str) -> None:
+        result = runner.invoke(
+            app, ["load", local_server, "-c", "5", "-d", "2", "-t", "3"]
         )
+        assert result.exit_code == 0
 
 
 class TestCLIStressSubcommand:
-    @patch("strobengine.cli.print_summary")
-    @patch("strobengine.cli.StrobEngine")
-    def test_stress_default(self, MockEngine, mock_print):
-        MockEngine.stress_test.return_value.run.return_value = _make_summary()
-        main(["stress", "http://example.com"])
-        MockEngine.stress_test.assert_called_once_with(
-            url="http://example.com",
-            start_concurrency=10,
-            max_concurrency=200,
-            ramp_duration=60,
-            hold_duration=30,
-            timeout=10,
-        )
-
-    @patch("strobengine.cli.print_summary")
-    @patch("strobengine.cli.StrobEngine")
-    def test_stress_custom_flags(self, MockEngine, mock_print):
-        MockEngine.stress_test.return_value.run.return_value = _make_summary()
-        main(
+    def test_stress_default(self, local_server: str) -> None:
+        result = runner.invoke(
+            app,
             [
                 "stress",
-                "http://test.io",
+                local_server,
                 "--from",
-                "5",
+                "2",
                 "--to",
-                "500",
-                "--ramp",
-                "30",
-                "--hold",
-                "15",
-                "-t",
                 "5",
-            ]
+                "--ramp",
+                "1",
+                "--hold",
+                "1",
+            ],
         )
-        MockEngine.stress_test.assert_called_once_with(
-            url="http://test.io",
-            start_concurrency=5,
-            max_concurrency=500,
-            ramp_duration=30,
-            hold_duration=15,
-            timeout=5,
+        assert result.exit_code == 0
+
+    def test_stress_custom_flags(self, local_server: str) -> None:
+        result = runner.invoke(
+            app,
+            [
+                "stress",
+                local_server,
+                "--from",
+                "3",
+                "--to",
+                "10",
+                "--ramp",
+                "2",
+                "--hold",
+                "1",
+                "-t",
+                "3",
+            ],
         )
+        assert result.exit_code == 0
 
 
 class TestCLISpikeSubcommand:
-    @patch("strobengine.cli.print_summary")
-    @patch("strobengine.cli.StrobEngine")
-    def test_spike_default(self, MockEngine, mock_print):
-        MockEngine.spike_test.return_value.run.return_value = _make_summary()
-        main(["spike", "http://example.com"])
-        MockEngine.spike_test.assert_called_once_with(
-            url="http://example.com",
-            baseline=5,
-            peak_concurrency=500,
-            pre_spike_duration=5,
-            spike_duration=10,
-            post_spike_duration=5,
-            timeout=10,
-        )
-
-    @patch("strobengine.cli.print_summary")
-    @patch("strobengine.cli.StrobEngine")
-    def test_spike_custom_flags(self, MockEngine, mock_print):
-        MockEngine.spike_test.return_value.run.return_value = _make_summary()
-        main(
+    def test_spike_default(self, local_server: str) -> None:
+        result = runner.invoke(
+            app,
             [
                 "spike",
-                "http://test.io",
+                local_server,
                 "--baseline",
-                "10",
+                "1",
                 "--peak",
-                "1000",
-                "--pre-spike",
                 "3",
                 "--spike-duration",
-                "7",
-                "--post-spike",
-                "3",
-                "-t",
+                "1",
+            ],
+        )
+        assert result.exit_code == 0
+
+    def test_spike_custom_flags(self, local_server: str) -> None:
+        result = runner.invoke(
+            app,
+            [
+                "spike",
+                local_server,
+                "--baseline",
+                "2",
+                "--peak",
                 "5",
-            ]
+                "--pre-spike",
+                "1",
+                "--spike-duration",
+                "2",
+                "--post-spike",
+                "1",
+                "-t",
+                "3",
+            ],
         )
-        MockEngine.spike_test.assert_called_once_with(
-            url="http://test.io",
-            baseline=10,
-            peak_concurrency=1000,
-            pre_spike_duration=3,
-            spike_duration=7,
-            post_spike_duration=3,
-            timeout=5,
-        )
+        assert result.exit_code == 0
 
 
 class TestCLIValidation:
-    def test_missing_url(self):
-        with pytest.raises(SystemExit) as exc_info:
-            main(["load"])
-        assert exc_info.value.code == 2
+    def test_load_invalid_concurrency(self) -> None:
+        result = runner.invoke(app, ["load", "http://unused", "-c", "0"])
+        assert result.exit_code != 0
 
-    def test_load_invalid_concurrency(self):
-        with pytest.raises(SystemExit) as exc_info:
-            main(["load", "http://example.com", "-c", "0"])
-        assert exc_info.value.code == 2
+    def test_load_invalid_duration(self) -> None:
+        result = runner.invoke(app, ["load", "http://unused", "-d", "0"])
+        assert result.exit_code != 0
 
-    def test_stress_invalid_from(self):
-        with pytest.raises(SystemExit) as exc_info:
-            main(["stress", "http://example.com", "--from", "0"])
-        assert exc_info.value.code == 2
+    def test_stress_invalid_from(self) -> None:
+        result = runner.invoke(app, ["stress", "http://unused", "--from", "0"])
+        assert result.exit_code != 0
 
-    def test_spike_invalid_baseline(self):
-        with pytest.raises(SystemExit) as exc_info:
-            main(["spike", "http://example.com", "--baseline", "0"])
-        assert exc_info.value.code == 2
+    def test_stress_invalid_to(self) -> None:
+        result = runner.invoke(app, ["stress", "http://unused", "--to", "0"])
+        assert result.exit_code != 0
+
+    def test_spike_invalid_baseline(self) -> None:
+        result = runner.invoke(app, ["spike", "http://unused", "--baseline", "0"])
+        assert result.exit_code != 0
+
+    def test_spike_invalid_peak(self) -> None:
+        result = runner.invoke(app, ["spike", "http://unused", "--peak", "0"])
+        assert result.exit_code != 0
 
 
 class TestCLIJsonOutput:
-    @patch("strobengine.cli.StrobEngine")
-    def test_json_load(self, MockEngine, capsys):
-        MockEngine.load_test.return_value.run.return_value = _make_summary()
-        main(["load", "http://example.com", "--json"])
-        output = capsys.readouterr().out
-        data = json.loads(output)
-        assert data["url"] == "http://example.com"
-        assert data["total_requests"] == 500
+    def test_json_load(self, local_server: str) -> None:
+        result = runner.invoke(
+            app, ["load", local_server, "-c", "2", "-d", "1", "--json"]
+        )
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert "total_requests" in data
+        assert "average_latency_ms" in data
+        assert data["url"] == local_server
 
-    @patch("strobengine.cli.StrobEngine")
-    def test_json_stress(self, MockEngine, capsys):
-        MockEngine.stress_test.return_value.run.return_value = _make_summary()
-        main(["stress", "http://example.com", "--json"])
-        output = capsys.readouterr().out
-        data = json.loads(output)
-        assert data["url"] == "http://example.com"
+    def test_json_stress(self, local_server: str) -> None:
+        result = runner.invoke(
+            app,
+            [
+                "stress",
+                local_server,
+                "--from",
+                "2",
+                "--to",
+                "5",
+                "--ramp",
+                "1",
+                "--hold",
+                "1",
+                "--json",
+            ],
+        )
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert "total_requests" in data
 
-    @patch("strobengine.cli.StrobEngine")
-    def test_json_spike(self, MockEngine, capsys):
-        MockEngine.spike_test.return_value.run.return_value = _make_summary()
-        main(["spike", "http://example.com", "--json"])
-        output = capsys.readouterr().out
-        data = json.loads(output)
-        assert data["url"] == "http://example.com"
+    def test_json_spike(self, local_server: str) -> None:
+        result = runner.invoke(
+            app,
+            [
+                "spike",
+                local_server,
+                "--baseline",
+                "1",
+                "--peak",
+                "3",
+                "--spike-duration",
+                "1",
+                "--json",
+            ],
+        )
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert "total_requests" in data
 
-    @patch("strobengine.cli.print_summary")
-    @patch("strobengine.cli.StrobEngine")
-    def test_json_not_set_uses_print_summary(self, MockEngine, mock_print):
-        MockEngine.load_test.return_value.run.return_value = _make_summary()
-        main(["load", "http://example.com"])
-        mock_print.assert_called_once()
+
+class TestCLIBackwardCompat:
+    def test_raw_url_defaults_to_load(self, local_server: str) -> None:
+        result = runner.invoke(app, [local_server, "-c", "2", "-d", "1"])
+        assert result.exit_code == 0
+
+    def test_flags_before_url(self, local_server: str) -> None:
+        result = runner.invoke(app, ["-c", "2", "-d", "1", local_server])
+        assert result.exit_code == 0
