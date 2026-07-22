@@ -8,6 +8,22 @@ import typer
 from strobengine.engine import StrobEngine
 from strobengine.reporter import print_summary
 
+
+def _get_version() -> str:
+    from importlib.metadata import PackageNotFoundError, version
+
+    try:
+        return version("strobengine")
+    except PackageNotFoundError:
+        return "0.0.0-dev"
+
+
+def _version_callback(value: bool) -> None:
+    if value:
+        typer.echo(f"strobengine {_get_version()}")
+        raise typer.Exit()
+
+
 app = typer.Typer(
     name="strobengine",
     help="High-performance load testing engine powered by Rust.",
@@ -16,6 +32,23 @@ app = typer.Typer(
 
 KNOWN_SUBCOMMANDS = {"load", "stress", "spike"}
 HELP_FLAGS = {"-h", "--help"}
+VERSION_FLAGS = {"-V", "--version"}
+
+
+@app.callback()
+def _global_options(
+    version: Annotated[
+        bool,
+        typer.Option(
+            "-V",
+            "--version",
+            help="Show version and exit",
+            is_eager=True,
+            callback=_version_callback,
+        ),
+    ] = False,
+) -> None:
+    pass
 
 
 def _output_results(summary, url: str, duration_secs: int, json_output: bool) -> None:
@@ -152,7 +185,7 @@ def main(argv: list[str] | None = None) -> None:
 
         argv = sys.argv[1:]
 
-    if argv and set(argv) & HELP_FLAGS:
+    if argv and set(argv) & (HELP_FLAGS | VERSION_FLAGS):
         app(args=argv)
         return
 

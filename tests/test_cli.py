@@ -185,3 +185,15 @@ class TestCLIBackwardCompat:
     def test_flags_before_url(self, local_server: str) -> None:
         result = runner.invoke(app, ["-c", "2", "-d", "1", local_server])
         assert result.exit_code == 0
+
+
+class TestCLIVersion:
+    def test_version_long_flag(self) -> None:
+        result = runner.invoke(app, ["--version"])
+        assert result.exit_code == 0
+        assert "strobengine" in result.output
+
+    def test_version_short_flag(self) -> None:
+        result = runner.invoke(app, ["-V"])
+        assert result.exit_code == 0
+        assert "strobengine" in result.output
