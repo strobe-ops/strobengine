@@ -14,6 +14,8 @@ pub async fn worker_loop(
     duration: Duration,
     token: CancellationToken,
 ) {
+    tracing::debug!("worker spawned");
+
     let start = Instant::now();
 
     while start.elapsed() < duration && !token.is_cancelled() {
@@ -26,14 +28,24 @@ pub async fn worker_loop(
                 let errored = !res.status().is_success();
                 if errored {
                     counters.errors.fetch_add(1, Ordering::Relaxed);
+                    tracing::warn!(status_code = code, "non-success HTTP status");
                 }
                 (code, errored)
             }
             Err(_) => {
                 counters.errors.fetch_add(1, Ordering::Relaxed);
+                tracing::warn!("request failed");
                 (0, true)
             }
         };
+
+        if tracing::enabled!(tracing::Level::TRACE) {
+            tracing::trace!(
+                status = status_code,
+                latency_us = req_start.elapsed().as_micros(),
+                "request completed"
+            );
+        }
 
         let metric = RequestMetric {
             status_code,

@@ -1,4 +1,5 @@
 mod config;
+mod logging;
 mod metrics;
 mod worker;
 
@@ -13,12 +14,25 @@ use crate::config::{LoadProfile, TestConfig};
 use crate::metrics::{LiveCounters, RequestMetric};
 
 #[pyfunction]
+fn init_logging(level: String, log_file: Option<String>) {
+    logging::init_tracing(&level, log_file.as_deref());
+}
+
+#[pyfunction]
 fn run_load_test(py: Python<'_>, config: TestConfig) -> PyResult<metrics::TestSummary> {
     py.detach(move || {
         let url = config.url;
         let concurrency = config.concurrency;
         let duration_secs = config.duration_secs;
         let timeout_secs = config.timeout_secs;
+
+        tracing::info!(
+            url,
+            concurrency,
+            duration_secs,
+            timeout_secs,
+            "starting constant load test"
+        );
 
         let rt = tokio::runtime::Builder::new_multi_thread()
             .enable_all()
@@ -31,6 +45,8 @@ fn run_load_test(py: Python<'_>, config: TestConfig) -> PyResult<metrics::TestSu
                 .timeout(Duration::from_secs(timeout_secs))
                 .build()
                 .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+
+            tracing::debug!("http client created");
 
             let counters = Arc::new(LiveCounters::new());
             let duration = Duration::from_secs(duration_secs);
@@ -62,6 +78,8 @@ fn run_load_test(py: Python<'_>, config: TestConfig) -> PyResult<metrics::TestSu
                 ));
             }
 
+            tracing::debug!(workers = concurrency, "worker tasks spawned");
+
             drop(tx);
 
             for (handle, _token) in handles {
@@ -74,6 +92,8 @@ fn run_load_test(py: Python<'_>, config: TestConfig) -> PyResult<metrics::TestSu
 
             let total = counters.total_requests.load(Ordering::Relaxed);
             let errors = counters.errors.load(Ordering::Relaxed);
+
+            tracing::info!(total, errors, "constant load test completed");
 
             Ok(metrics::calculate_summary(total, errors, latencies))
         })
@@ -91,6 +111,14 @@ fn run_load_profiles(
         let max_concurrency = profile.max_concurrency();
         let total_duration_secs = profile.total_duration();
 
+        tracing::info!(
+            url,
+            timeout_secs,
+            max_concurrency,
+            total_duration_secs,
+            "starting profile load test"
+        );
+
         let rt = tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .build()
@@ -102,6 +130,8 @@ fn run_load_profiles(
                 .timeout(Duration::from_secs(timeout_secs))
                 .build()
                 .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+
+            tracing::debug!("http client created");
 
             let counters = Arc::new(LiveCounters::new());
             let total_duration = Duration::from_secs(total_duration_secs);
@@ -161,6 +191,8 @@ fn run_load_profiles(
                         }
                     }
 
+                    tracing::debug!(current_concurrency, target, "supervisor tick");
+
                     tokio::time::sleep(Duration::from_millis(200)).await;
                 }
 
@@ -185,6 +217,8 @@ fn run_load_profiles(
             let total = counters.total_requests.load(Ordering::Relaxed);
             let errors = counters.errors.load(Ordering::Relaxed);
 
+            tracing::info!(total, errors, "profile load test completed");
+
             Ok(metrics::calculate_summary(total, errors, latencies))
         })
     })
@@ -195,6 +229,7 @@ fn run_load_profiles(
 /// import the module.
 #[pymodule]
 fn _strobengine(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_function(wrap_pyfunction!(init_logging, m)?)?;
     m.add_function(wrap_pyfunction!(run_load_test, m)?)?;
     m.add_function(wrap_pyfunction!(run_load_profiles, m)?)?;
     m.add_class::<config::TestConfig>()?;
