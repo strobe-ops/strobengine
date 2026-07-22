@@ -1,8 +1,9 @@
 import json
 
+import pytest
 from typer.testing import CliRunner
 
-from strobengine.cli import app
+from strobengine.cli import app, main
 
 runner = CliRunner()
 
@@ -179,12 +180,14 @@ class TestCLIJsonOutput:
 
 class TestCLIBackwardCompat:
     def test_raw_url_defaults_to_load(self, local_server: str) -> None:
-        result = runner.invoke(app, [local_server, "-c", "2", "-d", "1"])
-        assert result.exit_code == 0
+        with pytest.raises(SystemExit) as exc_info:
+            main([local_server, "-c", "2", "-d", "1"])
+        assert exc_info.value.code == 0
 
     def test_flags_before_url(self, local_server: str) -> None:
-        result = runner.invoke(app, ["-c", "2", "-d", "1", local_server])
-        assert result.exit_code == 0
+        with pytest.raises(SystemExit) as exc_info:
+            main(["-c", "2", "-d", "1", local_server])
+        assert exc_info.value.code == 0
 
 
 class TestCLIVersion:
