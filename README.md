@@ -64,16 +64,6 @@ For async contexts (FastAPI, Typer, etc.):
 summary = await engine.run_async()
 ```
 
-### Pretty output with Rich
-
-Install the optional `rich` dependency for colorized table output:
-
-```bash
-uv sync --extra rich
-```
-
-Without `rich`, `print_summary` falls back to clean plain-text formatting.
-
 ## CLI Usage
 
 ```bash
