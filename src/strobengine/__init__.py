@@ -1,4 +1,17 @@
-from strobengine._strobengine import TestConfig, TestSummary, run_load_test
+from strobengine._strobengine import (
+    LoadProfile,
+    TestConfig,
+    TestSummary,
+    run_load_profiles,
+    run_load_test,
+)
 from strobengine.engine import StrobEngine
 
-__all__ = ["StrobEngine", "TestConfig", "TestSummary", "run_load_test"]
+__all__ = [
+    "LoadProfile",
+    "StrobEngine",
+    "TestConfig",
+    "TestSummary",
+    "run_load_profiles",
+    "run_load_test",
+]

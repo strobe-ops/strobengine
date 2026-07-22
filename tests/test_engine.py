@@ -85,3 +85,110 @@ class TestStrobEngineRunAsync:
         result = await engine.run_async()
 
         assert result is expected
+
+
+class TestLoadTestFactory:
+    def test_load_test_defaults(self):
+        engine = StrobEngine.load_test(url="http://example.com")
+        assert engine.config.url == "http://example.com"
+        assert engine.config.concurrency == 10
+        assert engine.config.duration_secs == 10
+        assert engine.config.timeout_secs == 10
+        assert engine._profile is None
+
+    def test_load_test_custom(self):
+        engine = StrobEngine.load_test(
+            url="http://test.io", concurrency=50, duration=30, timeout=5
+        )
+        assert engine.config.concurrency == 50
+        assert engine.config.duration_secs == 30
+        assert engine.config.timeout_secs == 5
+
+
+class TestStressTestFactory:
+    def test_stress_test_creates_profile(self):
+        engine = StrobEngine.stress_test(
+            url="http://example.com",
+            start_concurrency=10,
+            max_concurrency=200,
+            ramp_duration=60,
+            hold_duration=30,
+        )
+        assert engine._url == "http://example.com"
+        assert engine._profile is not None
+        assert engine.config is None
+
+    def test_stress_test_invalid_start(self):
+        with pytest.raises(
+            ValueError, match="start_concurrency must be greater than 0"
+        ):
+            StrobEngine.stress_test(
+                url="http://example.com", start_concurrency=0, max_concurrency=200
+            )
+
+    def test_stress_test_invalid_max(self):
+        with pytest.raises(ValueError, match="max_concurrency must be greater than 0"):
+            StrobEngine.stress_test(
+                url="http://example.com", start_concurrency=10, max_concurrency=0
+            )
+
+    def test_stress_test_start_exceeds_max(self):
+        with pytest.raises(
+            ValueError, match="start_concurrency must be <= max_concurrency"
+        ):
+            StrobEngine.stress_test(
+                url="http://example.com", start_concurrency=200, max_concurrency=10
+            )
+
+    def test_stress_test_negative_ramp(self):
+        with pytest.raises(ValueError, match="ramp_duration must be >= 0"):
+            StrobEngine.stress_test(url="http://example.com", ramp_duration=-1)
+
+
+class TestSpikeTestFactory:
+    def test_spike_test_creates_profile(self):
+        engine = StrobEngine.spike_test(
+            url="http://example.com",
+            baseline=5,
+            peak_concurrency=500,
+            pre_spike_duration=5,
+            spike_duration=10,
+            post_spike_duration=5,
+        )
+        assert engine._url == "http://example.com"
+        assert engine._profile is not None
+        assert engine.config is None
+
+    def test_spike_test_invalid_baseline(self):
+        with pytest.raises(ValueError, match="baseline must be greater than 0"):
+            StrobEngine.spike_test(url="http://example.com", baseline=0)
+
+    def test_spike_test_invalid_peak(self):
+        with pytest.raises(ValueError, match="peak_concurrency must be greater than 0"):
+            StrobEngine.spike_test(url="http://example.com", peak_concurrency=0)
+
+    def test_spike_test_negative_pre_spike(self):
+        with pytest.raises(ValueError, match="pre_spike_duration must be >= 0"):
+            StrobEngine.spike_test(url="http://example.com", pre_spike_duration=-1)
+
+
+class TestProfileRun:
+    @patch("strobengine.engine.run_load_profiles")
+    def test_stress_test_run_calls_profiles(self, mock_run):
+        mock_run.return_value = _make_summary()
+
+        engine = StrobEngine.stress_test(url="http://example.com")
+        result = engine.run()
+
+        mock_run.assert_called_once()
+        assert result is not None
+
+    @patch("strobengine.engine.run_load_profiles")
+    def test_spike_test_run_calls_profiles(self, mock_run):
+        mock_run.return_value = _make_summary()
+
+        engine = StrobEngine.spike_test(url="http://example.com")
+        result = engine.run()
+
+        mock_run.assert_called_once()
+        assert result is not None
