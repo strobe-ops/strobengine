@@ -15,6 +15,7 @@ A high-performance HTTP load testing engine with a Python API and a bare-metal R
 | pyo3 | 0.29 | Python FFI bindings (stable ABI, abi3-py39) |
 | reqwest | 0.13 | HTTP client with connection pooling |
 | tokio | 1.53 | Multi-threaded async runtime |
+| tokio-util | 0.7 | CancellationToken for graceful worker shutdown |
 
 ## Installation & Compilation
 
@@ -34,19 +35,27 @@ uv sync
 ```python
 from strobengine import StrobEngine, print_summary
 
-# Create the engine
-engine = StrobEngine(
-    url="http://localhost:8080/api/health",
-    concurrency=50,
-    duration=30,
-    timeout=5,
-)
-
-# Run the test — Python GIL is released during execution
+# Constant load test
+engine = StrobEngine(url="http://localhost:8080/api/health", concurrency=50, duration=30)
 summary = engine.run()
 
-# Print a formatted summary
-print_summary(summary, url=engine.config.url, duration_secs=30)
+# Ramp/stress test (10 -> 200 workers over 60s, hold 30s)
+engine = StrobEngine.stress_test(
+    "http://localhost:8080/api/health",
+    start_concurrency=10, max_concurrency=200,
+    ramp_duration=60, hold_duration=30,
+)
+summary = engine.run()
+
+# Spike test (baseline 5 -> peak 500 -> back to 5)
+engine = StrobEngine.spike_test(
+    "http://localhost:8080/api/health",
+    baseline=5, peak_concurrency=500,
+    pre_spike_duration=5, spike_duration=10, post_spike_duration=5,
+)
+summary = engine.run()
+
+print_summary(summary, url=engine._url, duration_secs=30)
 ```
 
 For async contexts (FastAPI, Typer, etc.):
@@ -68,37 +77,69 @@ Without `rich`, `print_summary` falls back to clean plain-text formatting.
 ## CLI Usage
 
 ```bash
-strobengine http://localhost:8080/api/health
+# Constant load test (default subcommand)
+strobengine http://localhost:8080/api/health -c 50 -d 30
+
+# Ramp/stress test
+strobengine stress http://localhost:8080/api/health --from 10 --to 500 --ramp 60 --hold 30
+
+# Spike test
+strobengine spike http://localhost:8080/api/health --baseline 5 --peak 1000 --pre-spike 5 --spike-duration 10 --post-spike 5
+
+# JSON output for CI/CD
+strobengine load http://localhost:8080/api/health --json
 ```
 
 By default, this spawns **10 concurrent workers** for **10 seconds** with a **10-second request timeout**. Results are displayed as a formatted table with total requests, errors, requests/sec, and latency percentiles (avg, p95, p99).
 
-### Options
+### Subcommands
+
+| Subcommand | Description |
+|------------|-------------|
+| `load` | Constant load test (default if no subcommand given) |
+| `stress` | Ramp from starting to target concurrency, then hold |
+| `spike` | Baseline -> peak -> baseline |
+
+### Load Subcommand Options
 
 | Flag | Default | Description |
 |------|---------|-------------|
 | `-c`, `--concurrency` | `10` | Number of concurrent workers |
-| `-d`, `--duration` | `10` | Test duration in seconds |
+| `-d`, `--duration` | `10` | Duration in seconds |
 | `-t`, `--timeout` | `10` | Per-request timeout in seconds |
 | `--json` | off | Output raw JSON instead of formatted table |
 
-### Examples
+### Stress Subcommand Options
 
-```bash
-# 50 concurrent workers for 30 seconds
-strobengine http://localhost:8080/api/health -c 50 -d 30
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--from` | `10` | Starting concurrency |
+| `--to` | `200` | Target concurrency |
+| `--ramp` | `60` | Ramp duration in seconds |
+| `--hold` | `30` | Hold duration at target concurrency |
+| `-t`, `--timeout` | `10` | Per-request timeout in seconds |
+| `--json` | off | Output raw JSON |
 
-# JSON output for CI/CD pipelines
-strobengine http://localhost:8080/api/health --json
-```
+### Spike Subcommand Options
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--baseline` | `5` | Baseline concurrency |
+| `--peak` | `500` | Peak concurrency |
+| `--pre-spike` | `5` | Pre-spike duration in seconds |
+| `--spike-duration` | `10` | Spike duration in seconds |
+| `--post-spike` | `5` | Post-spike duration in seconds |
+| `-t`, `--timeout` | `10` | Per-request timeout in seconds |
+| `--json` | off | Output raw JSON |
 
 ## Architecture
 
 strobengine separates configuration, execution, and metrics into clean Rust modules, exposed to Python via PyO3:
 
-- **`config`** -- `TestConfig` pyclass holding test parameters (URL, concurrency, duration, timeout).
-- **`worker`** -- Async worker loops spawned across a multi-threaded Tokio runtime. Each worker fires HTTP requests via reqwest, records microsecond-precise latencies, and sends metrics through a bounded channel.
+- **`config`** -- `TestConfig` for static load, `LoadProfile` enum for dynamic profiles (Constant, Ramp, Spike) with target concurrency interpolation.
+- **`worker`** -- Async worker loops accepting `CancellationToken` for graceful shutdown. Workers finish in-flight requests before exiting.
 - **`metrics`** -- Lock-free atomic counters (`AtomicUsize`) track total requests and errors without contention. An aggregator task collects raw latencies, then `calculate_summary` computes average, p95, and p99 percentiles in Rust at bare-metal speed.
+- **Orchestrator** -- Supervisor task ticks every 200ms, calculates target concurrency from the active profile curve, spawns/aborts workers dynamically.
 
 The Python GIL is released entirely via `py.detach()` during test execution, allowing the full Tokio thread pool to run concurrently without throttling Python.
 
