@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 import pytest
 from typer.testing import CliRunner
@@ -200,3 +201,26 @@ class TestCLIVersion:
         result = runner.invoke(app, ["-V"])
         assert result.exit_code == 0
         assert "strobengine" in result.output
+
+
+class TestCLIVerbosity:
+    def test_verbose_flag(self, local_server: str) -> None:
+        result = runner.invoke(app, ["-v", "load", local_server, "-c", "2", "-d", "1"])
+        assert result.exit_code == 0
+
+    def test_double_verbose(self, local_server: str) -> None:
+        result = runner.invoke(app, ["-vv", "load", local_server, "-c", "2", "-d", "1"])
+        assert result.exit_code == 0
+
+    def test_quiet_flag(self, local_server: str) -> None:
+        result = runner.invoke(app, ["-q", "load", local_server, "-c", "2", "-d", "1"])
+        assert result.exit_code == 0
+
+    def test_log_file_flag(self, local_server: str, tmp_path: Path) -> None:
+        log_file = str(tmp_path / "test.log")
+        result = runner.invoke(
+            app,
+            ["-v", "--log-file", log_file, "load", local_server, "-c", "2", "-d", "1"],
+        )
+        assert result.exit_code == 0
+        assert Path(log_file).exists()
