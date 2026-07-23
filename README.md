@@ -35,11 +35,14 @@ uv sync
 ## Quick Start Usage
 
 ```python
-from strobengine import StrobEngine, print_summary
+from strobengine import StrobEngine
+from strobengine.reporter import print_summary
 
 # Constant load test
 engine = StrobEngine(url="http://localhost:8080/api/health", concurrency=50, duration=30)
 summary = engine.run()
+
+print_summary(summary, url=engine._url, duration_secs=30)
 
 # Ramp/stress test (10 -> 200 workers over 60s, hold 30s)
 engine = StrobEngine.stress_test(
@@ -48,6 +51,8 @@ engine = StrobEngine.stress_test(
     ramp_duration=60, hold_duration=30,
 )
 summary = engine.run()
+
+print_summary(summary, url=engine._url, duration_secs=30)
 
 # Spike test (baseline 5 -> peak 500 -> back to 5)
 engine = StrobEngine.spike_test(
