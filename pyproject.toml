@@ -6,7 +6,7 @@ readme = "README.md"
 authors = [
     { name = "riccione", email = "28346232+riccione@users.noreply.github.com" }
 ]
-requires-python = ">=3.11"
+requires-python = ">=3.13"
 dependencies = [
     "rich>=13.0.0",
     "typer>=0.27.0",
@@ -38,3 +38,53 @@ dev = [
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+
+[tool.ruff]
+# Target Python 3.13 features
+target-version = "py313"
+
+# Match standard Black line length
+line-length = 88
+
+# Exclude common generated/temporary directories
+exclude = [
+    ".git",
+    ".venv",
+    "__pycache__",
+    "build",
+    "dist",
+]
+
+[tool.ruff.lint]
+# Selected rule sets:
+# E/W   - pycodestyle (errors/warnings)
+# F     - Pyflakes
+# I     - isort (import sorting)
+# UP    - pyupgrade (modernize Python syntax automatically)
+# B     - flake8-bugbear (catches common bugs/design pitfalls)
+# SIM   - flake8-simplify (suggests cleaner code patterns)
+# RUF   - Ruff-specific rules
+select = ["E", "W", "F", "I", "UP", "B", "SIM", "RUF"]
+
+# Ignore rules that conflict with Ruff's automatic code formatter
+ignore = [
+    "E501", # Line length (handled by formatter)
+]
+
+[tool.ruff.lint.isort]
+# Combine multiple imports from the same package onto one line
+combine-as-imports = true
+
+[tool.ruff.lint.per-file-ignores]
+# Relax assertions and magic numbers inside tests
+"tests/**/*.py" = [
+    "S101", # Allow `assert` statements
+    "PLR2004", # Allow magic values in test comparisons
+]
+
+[tool.ruff.format]
+# Use double quotes for strings (standard across Black/Ruff)
+quote-style = "double"
+
+# Format code blocks inside docstrings
+docstring-code-format = true

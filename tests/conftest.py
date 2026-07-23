@@ -1,7 +1,7 @@
 import http.server
 import socketserver
 import threading
-from typing import Generator
+from collections.abc import Generator
 
 import pytest
 
@@ -18,7 +18,7 @@ class QuietHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
 
 
 @pytest.fixture(scope="session")
-def local_server() -> Generator[str, None, None]:
+def local_server() -> Generator[str]:
     server = socketserver.TCPServer(("127.0.0.1", 0), QuietHTTPRequestHandler)
     ip, port = server.server_address
     thread = threading.Thread(target=server.serve_forever, daemon=True)
