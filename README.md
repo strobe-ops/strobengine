@@ -4,7 +4,7 @@ A high-performance HTTP load testing engine with a Python API and a bare-metal R
 
 ## Dependencies
 
-- **Python** >= 3.13
+- **Python** >= 3.11
 - **Rust** (stable, with `cargo`)
 - **uv** (Python package manager)
 
@@ -12,7 +12,7 @@ A high-performance HTTP load testing engine with a Python API and a bare-metal R
 
 | Crate | Version | Purpose |
 |-------|---------|---------|
-| pyo3 | 0.29 | Python FFI bindings (stable ABI, abi3-py313) |
+| pyo3 | 0.29 | Python FFI bindings (stable ABI, abi3-py311) |
 | reqwest | 0.13 | HTTP client with connection pooling |
 | tokio | 1.53 | Multi-threaded async runtime |
 | tokio-util | 0.7 | CancellationToken for graceful worker shutdown |
