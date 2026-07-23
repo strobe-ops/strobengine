@@ -54,6 +54,7 @@ jobs:
     name: Publish to TestPyPI
     needs: [build-wheels, build-sdist]
     runs-on: ubuntu-latest
+    environment: testpypi
     permissions:
       id-token: write  # Required for OIDC
 
