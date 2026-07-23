@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import json
+import sys
 from typing import Annotated
 
 import typer
 
+from strobengine._strobengine import init_logging
 from strobengine.engine import StrobEngine
 from strobengine.reporter import print_summary
 
@@ -24,6 +26,36 @@ def _version_callback(value: bool) -> None:
         raise typer.Exit()
 
 
+def _resolve_log_level(verbose_count: int, quiet: bool) -> str:
+    if quiet:
+        return "off"
+    return {0: "warn", 1: "info", 2: "debug"}.get(verbose_count, "trace")
+
+
+def _configure_logging(level: str, log_file: str | None = None) -> None:
+    import logging
+
+    python_level = {
+        "off": logging.CRITICAL + 1,
+        "warn": logging.WARNING,
+        "info": logging.INFO,
+        "debug": logging.DEBUG,
+        "trace": logging.DEBUG,
+    }.get(level, logging.WARNING)
+
+    handlers: list[logging.Handler] = [logging.StreamHandler(sys.stderr)]
+    if log_file:
+        handlers.append(logging.FileHandler(log_file))
+
+    logging.basicConfig(
+        level=python_level,
+        format="%(asctime)s [%(levelname)s] %(message)s",
+        handlers=handlers,
+        force=True,
+    )
+    init_logging(level, log_file)
+
+
 app = typer.Typer(
     name="strobengine",
     help="High-performance load testing engine powered by Rust.",
@@ -37,6 +69,21 @@ VERSION_FLAGS = {"-V", "--version"}
 
 @app.callback()
 def _global_options(
+    verbose: Annotated[
+        int,
+        typer.Option(
+            "-v",
+            "--verbose",
+            count=True,
+            help="Increase verbosity (-v INFO, -vv DEBUG, -vvv TRACE)",
+        ),
+    ] = 0,
+    quiet: Annotated[
+        bool, typer.Option("-q", "--quiet", help="Suppress all output")
+    ] = False,
+    log_file: Annotated[
+        str | None, typer.Option("--log-file", help="Write logs to file")
+    ] = None,
     version: Annotated[
         bool,
         typer.Option(
@@ -48,7 +95,8 @@ def _global_options(
         ),
     ] = False,
 ) -> None:
-    pass
+    level = _resolve_log_level(verbose, quiet)
+    _configure_logging(level, log_file)
 
 
 def _output_results(summary, url: str, duration_secs: int, json_output: bool) -> None:
@@ -179,17 +227,30 @@ def spike(
     _output_results(summary, url, pre_spike + spike_duration + post_spike, json_output)
 
 
+def _first_positional(argv: list[str]) -> str | None:
+    skip_next = False
+    for arg in argv:
+        if skip_next:
+            skip_next = False
+            continue
+        if arg.startswith("-"):
+            if arg in ("--log-file",):
+                skip_next = True
+            continue
+        return arg
+    return None
+
+
 def main(argv: list[str] | None = None) -> None:
     if argv is None:
-        import sys
-
         argv = sys.argv[1:]
 
     if argv and set(argv) & (HELP_FLAGS | VERSION_FLAGS):
         app(args=argv)
         return
 
-    if argv and argv[0] not in KNOWN_SUBCOMMANDS:
+    first = _first_positional(argv)
+    if first is not None and first not in KNOWN_SUBCOMMANDS:
         argv = ["load", *argv]
 
     try:
