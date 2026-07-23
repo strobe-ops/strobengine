@@ -6,7 +6,7 @@ readme = "README.md"
 authors = [
     { name = "riccione", email = "28346232+riccione@users.noreply.github.com" }
 ]
-requires-python = ">=3.13"
+requires-python = ">=3.11"
 dependencies = [
     "rich>=13.0.0",
     "typer>=0.27.0",
@@ -40,8 +40,8 @@ asyncio_mode = "auto"
 testpaths = ["tests"]
 
 [tool.ruff]
-# Target Python 3.13 features
-target-version = "py313"
+# Target Python 3.11 features
+target-version = "py311"
 
 # Match standard Black line length
 line-length = 88
