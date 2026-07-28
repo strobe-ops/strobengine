@@ -1,0 +1,85 @@
+# Roadmap
+
+This document outlines the planned trajectory and upcoming feature epics for **strobengine**. 
+
+> **Note:** Priorities and timelines may adjust based on community feedback, feature requests, and core architectural developments.
+
+---
+
+## Core Tooling & Distribution
+
+### Epic: MVP Baseline Engine
+- [x] High-throughput HTTP execution core (Rust async runtime).
+- [x] Basic CLI flags (`-c`, `-d`, target URL).
+- [x] Initial benchmark suite against k6.
+
+### Epic: Real-Time Telemetry & Progress Bars
+*Target Focus: UX & Observability*
+
+- [ ] Interactive CLI progress indicators (live RPS, active virtual users, latency feed).
+- [ ] Real-time telemetry dashboard / TUI integration.
+- [ ] Improved streaming metrics collection to minimize memory overhead during long runs.
+
+---
+
+### Epic: HTTP Customization
+*Target Focus: Feature Completeness*
+
+- [ ] Custom HTTP Headers support (authentication, user-agents, metadata).
+- [ ] Dynamic & static Request Payloads (`POST`/`PUT`/`PATCH` body support with JSON/Form Data).
+- [ ] Support for all standard HTTP methods (`GET`, `POST`, `PUT`, `DELETE`, `PATCH`, `HEAD`, `OPTIONS`).
+
+---
+
+### Epic: Automated End-to-End Test Suite
+*Target Focus: Quality Assurance & Reliability*
+
+- [ ] E2E integration tests against mock HTTP targets (error scenarios, timeouts, high concurrency).
+- [ ] Benchmarking and performance regression tests in CI pipeline.
+- [ ] Automated cross-platform CLI verification (Linux, macOS, Windows).
+
+---
+
+### Epic: Binary Distribution & PyPI Publishing
+*Target Focus: Packaging & Ecosystem Delivery*
+
+- [ ] Standalone binary compilation/build matrix for main target architectures.
+- [ ] PyPI package publishing workflow (`pip install strobengine`).
+- [ ] GitHub Actions release pipeline for automatic binaries attachment on tag creation.
+
+---
+
+## Modern Web APIs
+
+### Epic: Modern Web APIs
+*Target Focus: Protocol Expansion*
+
+- [ ] **WebSockets (`ws://`, `wss://`)**
+  - [ ] Full-duplex connection handshakes.
+  - [ ] Frame broadcasting and continuous message load generation.
+- [ ] **gRPC**
+  - [ ] Protobuf service definition parsing.
+  - [ ] HTTP/2 multiplexing and stream management.
+- [ ] **HTTP/3 (QUIC)**
+  - [ ] UDP-based QUIC transport layer support.
+  - [ ] Zero-RTT connection testing and loss recovery benchmarking.
+
+---
+
+## Infrastructure & Streaming Protocols
+
+### Epic: Infrastructure & Low-Level Transport
+*Target Focus: Enterprise & Deep Performance Testing*
+
+- [ ] **Event Brokers**
+  - [ ] **Apache Kafka**: High-throughput producer load testing and message ingestion benchmarking.
+  - [ ] **MQTT**: IoT publish/subscribe message broker stress testing.
+- [ ] **Low-Level Transport**
+  - [ ] **Raw TCP Socket Testing**: Custom payload socket streaming.
+  - [ ] **Raw UDP Socket Testing**: High-frequency datagram hammering and packet loss evaluation.
+
+---
+
+## Contributing to the Roadmap
+
+Have ideas for future milestones or improvements? Feel free to open a feature request via [GitHub Issues](../../issues) or join the discussion!
