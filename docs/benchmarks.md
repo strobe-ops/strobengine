@@ -75,6 +75,8 @@ For details about implementation check [infractucture.md](infrastcture.md).
 
 ### Grafana k6
 
+k6 v2.0.0 (commit/8c3be52cc1, go1.26.3, linux/amd64)
+
 ```bash
 /usr/bin/time -v k6 run - --vus 300 --duration 10s <<< 'import http from "k6/http"; export default function() { http.get("http://172.31.4.194/"); }'
 
@@ -141,6 +143,8 @@ default ✓ [======================================] 300 VUs  10s
 ```
 
 ### strobengine
+
+strbeingine v0.1.0
 
 ```bash
 /usr/bin/time -v uv run strobengine http://172.31.4.194/ -c 300 -d 10
