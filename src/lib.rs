@@ -7,8 +7,10 @@ mod chaos;
 mod config;
 mod logging;
 mod metrics;
+mod progress;
 mod worker;
 
+use std::io::IsTerminal;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
@@ -45,6 +47,7 @@ fn run_load_test(py: Python<'_>, config: TestConfig) -> PyResult<metrics::TestSu
         let duration_secs = config.duration_secs;
         let timeout_secs = config.timeout_secs;
         let chaos = ChaosEngine::new(config.chaos, config.chaos_rate);
+        let no_progress = config.no_progress;
 
         tracing::info!(
             url,
@@ -68,6 +71,7 @@ fn run_load_test(py: Python<'_>, config: TestConfig) -> PyResult<metrics::TestSu
 
             let counters = Arc::new(LiveCounters::new());
             let duration = Duration::from_secs(duration_secs);
+            let test_start = Instant::now();
 
             let (tx, rx) = tokio::sync::mpsc::channel::<RequestMetric>(8192);
 
@@ -78,6 +82,22 @@ fn run_load_test(py: Python<'_>, config: TestConfig) -> PyResult<metrics::TestSu
                     latencies.push(metric.latency_micros);
                 }
                 latencies
+            });
+
+            // Spawn progress render task (only on TTY when enabled)
+            let use_progress = !no_progress && std::io::stderr().is_terminal();
+            let pb = if use_progress {
+                Some(progress::create_progress_bar(duration))
+            } else {
+                None
+            };
+            let render_handle = pb.as_ref().map(|pb| {
+                tokio::spawn(progress::render_loop(
+                    pb.clone(),
+                    Arc::clone(&counters),
+                    test_start,
+                    duration,
+                ))
             });
 
             let mut handles = Vec::with_capacity(concurrency);
@@ -105,6 +125,11 @@ fn run_load_test(py: Python<'_>, config: TestConfig) -> PyResult<metrics::TestSu
                 let _ = handle.await;
             }
 
+            // Wait for render task to finish naturally
+            if let Some(handle) = render_handle {
+                let _ = handle.await;
+            }
+
             let latencies = aggregator
                 .await
                 .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
@@ -120,6 +145,7 @@ fn run_load_test(py: Python<'_>, config: TestConfig) -> PyResult<metrics::TestSu
 }
 
 #[pyfunction]
+#[pyo3(signature = (url, timeout_secs, profile, chaos=false, chaos_rate=crate::chaos::DEFAULT_CHAOS_RATE, no_progress=false))]
 fn run_load_profiles(
     py: Python<'_>,
     url: String,
@@ -127,6 +153,7 @@ fn run_load_profiles(
     profile: LoadProfile,
     chaos: bool,
     chaos_rate: f32,
+    no_progress: bool,
 ) -> PyResult<metrics::TestSummary> {
     py.detach(move || {
         let max_concurrency = profile.max_concurrency();
@@ -154,6 +181,7 @@ fn run_load_profiles(
 
             let counters = Arc::new(LiveCounters::new());
             let total_duration = Duration::from_secs(total_duration_secs);
+            let test_start = Instant::now();
 
             let (tx, rx) = tokio::sync::mpsc::channel::<RequestMetric>(8192);
 
@@ -164,6 +192,22 @@ fn run_load_profiles(
                     latencies.push(metric.latency_micros);
                 }
                 latencies
+            });
+
+            // Spawn progress render task (only on TTY when enabled)
+            let use_progress = !no_progress && std::io::stderr().is_terminal();
+            let pb = if use_progress {
+                Some(progress::create_progress_bar(total_duration))
+            } else {
+                None
+            };
+            let render_handle = pb.as_ref().map(|pb| {
+                tokio::spawn(progress::render_loop(
+                    pb.clone(),
+                    Arc::clone(&counters),
+                    test_start,
+                    total_duration,
+                ))
             });
 
             let counters_clone = Arc::clone(&counters);
@@ -229,6 +273,11 @@ fn run_load_profiles(
             supervisor
                 .await
                 .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+
+            // Wait for render task to finish naturally
+            if let Some(handle) = render_handle {
+                let _ = handle.await;
+            }
 
             let latencies = aggregator
                 .await
