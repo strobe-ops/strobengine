@@ -1,4 +1,4 @@
-use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::{AtomicU64, AtomicUsize};
 
 use pyo3::prelude::*;
 
@@ -12,6 +12,10 @@ pub struct RequestMetric {
 pub struct LiveCounters {
     pub total_requests: AtomicUsize,
     pub errors: AtomicUsize,
+    pub active_workers: AtomicUsize,
+    pub completed_requests: AtomicU64,
+    pub latency_sum_micros: AtomicU64,
+    pub latency_count: AtomicU64,
 }
 
 impl LiveCounters {
@@ -19,6 +23,10 @@ impl LiveCounters {
         Self {
             total_requests: AtomicUsize::new(0),
             errors: AtomicUsize::new(0),
+            active_workers: AtomicUsize::new(0),
+            completed_requests: AtomicU64::new(0),
+            latency_sum_micros: AtomicU64::new(0),
+            latency_count: AtomicU64::new(0),
         }
     }
 }

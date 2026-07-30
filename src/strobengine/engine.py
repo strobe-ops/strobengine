@@ -18,10 +18,12 @@ class StrobEngine:
         timeout: int = 10,
         profile: LoadProfile | None = None,
         chaos: bool = False,
+        no_progress: bool = False,
     ) -> None:
         self._url = url
         self._timeout = timeout
         self._chaos = chaos
+        self._no_progress = no_progress
 
         if profile is None:
             if concurrency <= 0:
@@ -37,6 +39,7 @@ class StrobEngine:
                 duration_secs=duration,
                 timeout_secs=timeout,
                 chaos=chaos,
+                no_progress=no_progress,
             )
             self._profile = None
         else:
@@ -54,6 +57,7 @@ class StrobEngine:
         duration: int = 10,
         timeout: int = 10,
         chaos: bool = False,
+        no_progress: bool = False,
     ) -> "StrobEngine":
         return cls(
             url=url,
@@ -61,6 +65,7 @@ class StrobEngine:
             duration=duration,
             timeout=timeout,
             chaos=chaos,
+            no_progress=no_progress,
         )
 
     @classmethod
@@ -73,6 +78,7 @@ class StrobEngine:
         hold_duration: int = 30,
         timeout: int = 10,
         chaos: bool = False,
+        no_progress: bool = False,
     ) -> "StrobEngine":
         if start_concurrency <= 0:
             raise ValueError("start_concurrency must be greater than 0")
@@ -91,7 +97,13 @@ class StrobEngine:
             ramp_secs=ramp_duration,
             hold_secs=hold_duration,
         )
-        return cls(url=url, timeout=timeout, profile=profile, chaos=chaos)
+        return cls(
+            url=url,
+            timeout=timeout,
+            profile=profile,
+            chaos=chaos,
+            no_progress=no_progress,
+        )
 
     @classmethod
     def spike_test(
@@ -104,6 +116,7 @@ class StrobEngine:
         post_spike_duration: int = 5,
         timeout: int = 10,
         chaos: bool = False,
+        no_progress: bool = False,
     ) -> "StrobEngine":
         if baseline <= 0:
             raise ValueError("baseline must be greater than 0")
@@ -123,12 +136,22 @@ class StrobEngine:
             spike_secs=spike_duration,
             post_spike_secs=post_spike_duration,
         )
-        return cls(url=url, timeout=timeout, profile=profile, chaos=chaos)
+        return cls(
+            url=url,
+            timeout=timeout,
+            profile=profile,
+            chaos=chaos,
+            no_progress=no_progress,
+        )
 
     def run(self) -> TestSummary:
         if self._profile is not None:
             return run_load_profiles(
-                self._url, self._timeout, self._profile, self._chaos
+                self._url,
+                self._timeout,
+                self._profile,
+                self._chaos,
+                no_progress=self._no_progress,
             )
         return run_load_test(self.config)
 

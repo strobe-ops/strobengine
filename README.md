@@ -18,6 +18,8 @@ A high-performance HTTP load testing engine with a Python API and a bare-metal R
 | tokio-util | 0.7 | CancellationToken for graceful worker shutdown |
 | tracing | 0.1 | Structured logging instrumentation |
 | tracing-subscriber | 0.3 | Log formatting and output (stderr/file) |
+| indicatif | 0.17 | Terminal progress bar rendering |
+| fastrand | 2 | Fast random number generation for chaos injection |
 
 ## Installation & Compilation
 
@@ -88,6 +90,12 @@ strobengine load http://localhost:8080/api/health --json
 
 # Chaos/fault injection test (~10% of requests get faults)
 strobengine load http://localhost:8080/api/health --chaos
+
+# Verbose debug output
+strobengine load http://localhost:8080/api/health -vv
+
+# Quiet mode (suppress logs, keep progress bar)
+strobengine load http://localhost:8080/api/health -q
 ```
 
 By default, this spawns **10 concurrent workers** for **10 seconds** with a **10-second request timeout**. Results are displayed as a formatted table with total requests, errors, requests/sec, and latency percentiles (avg, p95, p99).
@@ -108,6 +116,10 @@ By default, this spawns **10 concurrent workers** for **10 seconds** with a **10
 | `-d`, `--duration` | `10` | Duration in seconds |
 | `-t`, `--timeout` | `10` | Per-request timeout in seconds |
 | `--chaos` | off | Enable fault injection (~10% of requests) |
+| `--no-progress` | off | Suppress live progress bar |
+| `-v`, `-vv`, `-vvv` | warn | Increase verbosity (INFO, DEBUG, TRACE) |
+| `-q`, `--quiet` | off | Suppress all output |
+| `--log-file <path>` | none | Write logs to file |
 | `--json` | off | Output raw JSON instead of formatted table |
 
 ### Stress Subcommand Options
@@ -120,6 +132,10 @@ By default, this spawns **10 concurrent workers** for **10 seconds** with a **10
 | `--hold` | `30` | Hold duration at target concurrency |
 | `-t`, `--timeout` | `10` | Per-request timeout in seconds |
 | `--chaos` | off | Enable fault injection (~10% of requests) |
+| `--no-progress` | off | Suppress live progress bar |
+| `-v`, `-vv`, `-vvv` | warn | Increase verbosity (INFO, DEBUG, TRACE) |
+| `-q`, `--quiet` | off | Suppress all output |
+| `--log-file <path>` | none | Write logs to file |
 | `--json` | off | Output raw JSON |
 
 ### Spike Subcommand Options
@@ -133,16 +149,42 @@ By default, this spawns **10 concurrent workers** for **10 seconds** with a **10
 | `--post-spike` | `5` | Post-spike duration in seconds |
 | `-t`, `--timeout` | `10` | Per-request timeout in seconds |
 | `--chaos` | off | Enable fault injection (~10% of requests) |
+| `--no-progress` | off | Suppress live progress bar |
+| `-v`, `-vv`, `-vvv` | warn | Increase verbosity (INFO, DEBUG, TRACE) |
+| `-q`, `--quiet` | off | Suppress all output |
+| `--log-file <path>` | none | Write logs to file |
 | `--json` | off | Output raw JSON |
 
 ### Global Options
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `-v`, `-vv`, `-vvv` | warn | Increase verbosity (INFO, DEBUG, TRACE) |
-| `-q`, `--quiet` | off | Suppress all output |
-| `--log-file <path>` | none | Write logs to file |
-| `-V`, `--version` | off | Show version and exit |
+| Flag | Description |
+|------|-------------|
+| `-V`, `--version` | Show version and exit |
+
+### Live Progress Bar
+
+During test execution, a live progress bar displays on stderr with real-time telemetry:
+
+```
+⠋ [00:00:05] [==============>-------------] 40% | 1250 req/s | 20 VUs | 12 err | avg 4.2ms
+```
+
+- **RPS**: Instantaneous requests per second (sampled every 200ms)
+- **VUs**: Active virtual users / concurrent workers
+- **Errors**: Total error count
+- **Avg latency**: Running average across all completed requests
+
+The progress bar auto-detects non-TTY environments (CI/CD, piped output) and suppresses itself. Use `--no-progress` to explicitly disable it on interactive terminals.
+
+### Verbosity Levels
+
+| Flag | Level | Shows |
+|------|-------|-------|
+| (default) | `warn` | Errors and warnings only |
+| `-v` | `info` | Engine start/stop, test configuration |
+| `-vv` | `debug` | Worker spawn, HTTP errors, connection events |
+| `-vvv` | `trace` | Per-request latency, status codes, chaos injection |
+| `-q` | off | Suppress all log output (progress bar remains) |
 
 Logs stream to **stderr** by default, keeping stdout clean for JSON output piping:
 
@@ -157,6 +199,8 @@ strobengine separates configuration, execution, and metrics into clean Rust modu
 - **`config`** -- `TestConfig` for static load, `LoadProfile` enum for dynamic profiles (Constant, Ramp, Spike) with target concurrency interpolation.
 - **`worker`** -- Async worker loops accepting `CancellationToken` for graceful shutdown. Workers finish in-flight requests before exiting.
 - **`metrics`** -- Lock-free atomic counters (`AtomicUsize`) track total requests and errors without contention. An aggregator task collects raw latencies, then `calculate_summary` computes average, p95, and p99 percentiles in Rust at bare-metal speed.
+- **`chaos`** -- Protocol-agnostic fault injection engine with `ChaosEngine` evaluator and `ChaosFault` enum (LatencySpike, CorruptedPayload, MetadataCorruption, ConnectionDrop).
+- **`progress`** -- Background Tokio render task sampling atomic metrics every 200ms, displaying live RPS, active VUs, and latency via indicatif.
 - **Orchestrator** -- Supervisor task ticks every 200ms, calculates target concurrency from the active profile curve, spawns/aborts workers dynamically.
 
 The Python GIL is released entirely via `py.detach()` during test execution, allowing the full Tokio thread pool to run concurrently without throttling Python.

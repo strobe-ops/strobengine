@@ -65,25 +65,11 @@ app = typer.Typer(
 KNOWN_SUBCOMMANDS = {"load", "stress", "spike"}
 HELP_FLAGS = {"-h", "--help"}
 VERSION_FLAGS = {"-V", "--version"}
+LOG_FLAGS = {"-v", "--verbose", "-q", "--quiet", "--log-file"}
 
 
 @app.callback()
 def _global_options(
-    verbose: Annotated[
-        int,
-        typer.Option(
-            "-v",
-            "--verbose",
-            count=True,
-            help="Increase verbosity (-v INFO, -vv DEBUG, -vvv TRACE)",
-        ),
-    ] = 0,
-    quiet: Annotated[
-        bool, typer.Option("-q", "--quiet", help="Suppress all output")
-    ] = False,
-    log_file: Annotated[
-        str | None, typer.Option("--log-file", help="Write logs to file")
-    ] = None,
     version: Annotated[
         bool,
         typer.Option(
@@ -95,8 +81,7 @@ def _global_options(
         ),
     ] = False,
 ) -> None:
-    level = _resolve_log_level(verbose, quiet)
-    _configure_logging(level, log_file)
+    pass
 
 
 def _output_results(summary, url: str, duration_secs: int, json_output: bool) -> None:
@@ -136,16 +121,31 @@ def load(
     chaos: Annotated[
         bool, typer.Option("--chaos", help="Enable fault injection (~10%% of requests)")
     ] = False,
+    no_progress: Annotated[
+        bool, typer.Option("--no-progress", help="Suppress live progress output")
+    ] = False,
     json_output: Annotated[
         bool, typer.Option("--json", help="Output raw JSON results")
     ] = False,
+    verbose: Annotated[
+        int,
+        typer.Option("-v", "--verbose", count=True, help="Increase verbosity"),
+    ] = 0,
+    quiet: Annotated[
+        bool, typer.Option("-q", "--quiet", help="Suppress all output")
+    ] = False,
+    log_file: Annotated[
+        str | None, typer.Option("--log-file", help="Write logs to file")
+    ] = None,
 ) -> None:
+    _configure_logging(_resolve_log_level(verbose, quiet), log_file)
     engine = StrobEngine.load_test(
         url=url,
         concurrency=concurrency,
         duration=duration,
         timeout=timeout,
         chaos=chaos,
+        no_progress=no_progress,
     )
     summary = engine.run()
     _output_results(summary, url, duration, json_output)
@@ -177,10 +177,24 @@ def stress(
     chaos: Annotated[
         bool, typer.Option("--chaos", help="Enable fault injection (~10%% of requests)")
     ] = False,
+    no_progress: Annotated[
+        bool, typer.Option("--no-progress", help="Suppress live progress output")
+    ] = False,
     json_output: Annotated[
         bool, typer.Option("--json", help="Output raw JSON results")
     ] = False,
+    verbose: Annotated[
+        int,
+        typer.Option("-v", "--verbose", count=True, help="Increase verbosity"),
+    ] = 0,
+    quiet: Annotated[
+        bool, typer.Option("-q", "--quiet", help="Suppress all output")
+    ] = False,
+    log_file: Annotated[
+        str | None, typer.Option("--log-file", help="Write logs to file")
+    ] = None,
 ) -> None:
+    _configure_logging(_resolve_log_level(verbose, quiet), log_file)
     engine = StrobEngine.stress_test(
         url=url,
         start_concurrency=start,
@@ -189,6 +203,7 @@ def stress(
         hold_duration=hold,
         timeout=timeout,
         chaos=chaos,
+        no_progress=no_progress,
     )
     summary = engine.run()
     _output_results(summary, url, ramp + hold, json_output)
@@ -224,10 +239,24 @@ def spike(
     chaos: Annotated[
         bool, typer.Option("--chaos", help="Enable fault injection (~10%% of requests)")
     ] = False,
+    no_progress: Annotated[
+        bool, typer.Option("--no-progress", help="Suppress live progress output")
+    ] = False,
     json_output: Annotated[
         bool, typer.Option("--json", help="Output raw JSON results")
     ] = False,
+    verbose: Annotated[
+        int,
+        typer.Option("-v", "--verbose", count=True, help="Increase verbosity"),
+    ] = 0,
+    quiet: Annotated[
+        bool, typer.Option("-q", "--quiet", help="Suppress all output")
+    ] = False,
+    log_file: Annotated[
+        str | None, typer.Option("--log-file", help="Write logs to file")
+    ] = None,
 ) -> None:
+    _configure_logging(_resolve_log_level(verbose, quiet), log_file)
     engine = StrobEngine.spike_test(
         url=url,
         baseline=baseline,
@@ -237,6 +266,7 @@ def spike(
         post_spike_duration=post_spike,
         timeout=timeout,
         chaos=chaos,
+        no_progress=no_progress,
     )
     summary = engine.run()
     _output_results(summary, url, pre_spike + spike_duration + post_spike, json_output)
