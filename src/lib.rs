@@ -3,6 +3,7 @@ use mimalloc::MiMalloc;
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
 
+mod chaos;
 mod config;
 mod logging;
 mod metrics;
@@ -15,6 +16,7 @@ use std::time::{Duration, Instant};
 use pyo3::prelude::*;
 use tokio_util::sync::CancellationToken;
 
+use crate::chaos::ChaosEngine;
 use crate::config::{LoadProfile, TestConfig};
 use crate::metrics::{LiveCounters, RequestMetric};
 
@@ -42,12 +44,15 @@ fn run_load_test(py: Python<'_>, config: TestConfig) -> PyResult<metrics::TestSu
         let concurrency = config.concurrency;
         let duration_secs = config.duration_secs;
         let timeout_secs = config.timeout_secs;
+        let chaos = ChaosEngine::new(config.chaos, config.chaos_rate);
 
         tracing::info!(
             url,
             concurrency,
             duration_secs,
             timeout_secs,
+            chaos = config.chaos,
+            chaos_rate = config.chaos_rate,
             "starting constant load test"
         );
 
@@ -86,6 +91,7 @@ fn run_load_test(py: Python<'_>, config: TestConfig) -> PyResult<metrics::TestSu
                         tx.clone(),
                         duration,
                         token.clone(),
+                        chaos,
                     )),
                     token,
                 ));
@@ -119,16 +125,20 @@ fn run_load_profiles(
     url: String,
     timeout_secs: u64,
     profile: LoadProfile,
+    chaos: bool,
+    chaos_rate: f32,
 ) -> PyResult<metrics::TestSummary> {
     py.detach(move || {
         let max_concurrency = profile.max_concurrency();
         let total_duration_secs = profile.total_duration();
+        let chaos_engine = ChaosEngine::new(chaos, chaos_rate);
 
         tracing::info!(
             url,
             timeout_secs,
             max_concurrency,
             total_duration_secs,
+            chaos,
             "starting profile load test"
         );
 
@@ -184,6 +194,7 @@ fn run_load_profiles(
                             tx.clone(),
                             remaining,
                             child_token.clone(),
+                            chaos_engine,
                         ));
                         tokens.push(child_token);
                         handles.push(handle);
