@@ -16,6 +16,11 @@ pub async fn worker_loop(
 ) {
     tracing::debug!("worker spawned");
 
+    // Pre-warm: establish TCP/TLS connection before measurement starts.
+    // Failures are silently ignored — the worker loop will retry.
+    tracing::trace!("pre-warming connection");
+    let _ = client.get(&url).send().await;
+
     let start = Instant::now();
 
     while start.elapsed() < duration && !token.is_cancelled() {
@@ -26,6 +31,8 @@ pub async fn worker_loop(
             Ok(res) => {
                 let code = res.status().as_u16();
                 let errored = !res.status().is_success();
+                // Drain response body to ensure clean connection return to pool
+                let _ = res.bytes().await;
                 if errored {
                     counters.errors.fetch_add(1, Ordering::Relaxed);
                     tracing::warn!(status_code = code, "non-success HTTP status");

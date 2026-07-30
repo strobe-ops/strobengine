@@ -18,6 +18,18 @@ use tokio_util::sync::CancellationToken;
 use crate::config::{LoadProfile, TestConfig};
 use crate::metrics::{LiveCounters, RequestMetric};
 
+fn build_client(concurrency: usize, timeout_secs: u64) -> reqwest::Client {
+    reqwest::Client::builder()
+        .pool_max_idle_per_host(concurrency)
+        .timeout(Duration::from_secs(timeout_secs))
+        .connect_timeout(Duration::from_secs(5))
+        .tcp_nodelay(true)
+        .http2_keep_alive_interval(Duration::from_secs(10))
+        .http2_keep_alive_timeout(Duration::from_secs(5))
+        .build()
+        .expect("failed to build HTTP client")
+}
+
 #[pyfunction]
 fn init_logging(level: String, log_file: Option<String>) {
     logging::init_tracing(&level, log_file.as_deref());
@@ -45,11 +57,7 @@ fn run_load_test(py: Python<'_>, config: TestConfig) -> PyResult<metrics::TestSu
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
 
         rt.block_on(async move {
-            let client = reqwest::Client::builder()
-                .pool_max_idle_per_host(concurrency)
-                .timeout(Duration::from_secs(timeout_secs))
-                .build()
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+            let client = build_client(concurrency, timeout_secs);
 
             tracing::debug!("http client created");
 
@@ -130,11 +138,7 @@ fn run_load_profiles(
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
 
         rt.block_on(async move {
-            let client = reqwest::Client::builder()
-                .pool_max_idle_per_host(max_concurrency)
-                .timeout(Duration::from_secs(timeout_secs))
-                .build()
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+            let client = build_client(max_concurrency, timeout_secs);
 
             tracing::debug!("http client created");
 
