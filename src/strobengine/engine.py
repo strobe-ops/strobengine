@@ -17,9 +17,11 @@ class StrobEngine:
         duration: int = 10,
         timeout: int = 10,
         profile: LoadProfile | None = None,
+        chaos: bool = False,
     ) -> None:
         self._url = url
         self._timeout = timeout
+        self._chaos = chaos
 
         if profile is None:
             if concurrency <= 0:
@@ -34,6 +36,7 @@ class StrobEngine:
                 concurrency=concurrency,
                 duration_secs=duration,
                 timeout_secs=timeout,
+                chaos=chaos,
             )
             self._profile = None
         else:
@@ -50,8 +53,15 @@ class StrobEngine:
         concurrency: int = 10,
         duration: int = 10,
         timeout: int = 10,
+        chaos: bool = False,
     ) -> "StrobEngine":
-        return cls(url=url, concurrency=concurrency, duration=duration, timeout=timeout)
+        return cls(
+            url=url,
+            concurrency=concurrency,
+            duration=duration,
+            timeout=timeout,
+            chaos=chaos,
+        )
 
     @classmethod
     def stress_test(
@@ -62,6 +72,7 @@ class StrobEngine:
         ramp_duration: int = 60,
         hold_duration: int = 30,
         timeout: int = 10,
+        chaos: bool = False,
     ) -> "StrobEngine":
         if start_concurrency <= 0:
             raise ValueError("start_concurrency must be greater than 0")
@@ -80,7 +91,7 @@ class StrobEngine:
             ramp_secs=ramp_duration,
             hold_secs=hold_duration,
         )
-        return cls(url=url, timeout=timeout, profile=profile)
+        return cls(url=url, timeout=timeout, profile=profile, chaos=chaos)
 
     @classmethod
     def spike_test(
@@ -92,6 +103,7 @@ class StrobEngine:
         spike_duration: int = 10,
         post_spike_duration: int = 5,
         timeout: int = 10,
+        chaos: bool = False,
     ) -> "StrobEngine":
         if baseline <= 0:
             raise ValueError("baseline must be greater than 0")
@@ -111,11 +123,13 @@ class StrobEngine:
             spike_secs=spike_duration,
             post_spike_secs=post_spike_duration,
         )
-        return cls(url=url, timeout=timeout, profile=profile)
+        return cls(url=url, timeout=timeout, profile=profile, chaos=chaos)
 
     def run(self) -> TestSummary:
         if self._profile is not None:
-            return run_load_profiles(self._url, self._timeout, self._profile)
+            return run_load_profiles(
+                self._url, self._timeout, self._profile, self._chaos
+            )
         return run_load_test(self.config)
 
     async def run_async(self) -> TestSummary:

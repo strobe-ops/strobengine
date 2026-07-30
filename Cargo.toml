@@ -20,4 +20,5 @@ tokio-util = { version = "0.7", features = ["rt"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "registry"] }
 mimalloc = "0.1.52"
+fastrand = "2"
 # pyo3-async-runtimes = { version = "0.29.0", features = ["tokio-runtime"] }

@@ -133,12 +133,19 @@ def load(
         int,
         typer.Option("-t", "--timeout", min=1, help="Request timeout in seconds"),
     ] = 10,
+    chaos: Annotated[
+        bool, typer.Option("--chaos", help="Enable fault injection (~10%% of requests)")
+    ] = False,
     json_output: Annotated[
         bool, typer.Option("--json", help="Output raw JSON results")
     ] = False,
 ) -> None:
     engine = StrobEngine.load_test(
-        url=url, concurrency=concurrency, duration=duration, timeout=timeout
+        url=url,
+        concurrency=concurrency,
+        duration=duration,
+        timeout=timeout,
+        chaos=chaos,
     )
     summary = engine.run()
     _output_results(summary, url, duration, json_output)
@@ -167,6 +174,9 @@ def stress(
         int,
         typer.Option("-t", "--timeout", help="Request timeout in seconds", min=1),
     ] = 10,
+    chaos: Annotated[
+        bool, typer.Option("--chaos", help="Enable fault injection (~10%% of requests)")
+    ] = False,
     json_output: Annotated[
         bool, typer.Option("--json", help="Output raw JSON results")
     ] = False,
@@ -178,6 +188,7 @@ def stress(
         ramp_duration=ramp,
         hold_duration=hold,
         timeout=timeout,
+        chaos=chaos,
     )
     summary = engine.run()
     _output_results(summary, url, ramp + hold, json_output)
@@ -210,6 +221,9 @@ def spike(
         int,
         typer.Option("-t", "--timeout", help="Request timeout in seconds", min=1),
     ] = 10,
+    chaos: Annotated[
+        bool, typer.Option("--chaos", help="Enable fault injection (~10%% of requests)")
+    ] = False,
     json_output: Annotated[
         bool, typer.Option("--json", help="Output raw JSON results")
     ] = False,
@@ -222,6 +236,7 @@ def spike(
         spike_duration=spike_duration,
         post_spike_duration=post_spike,
         timeout=timeout,
+        chaos=chaos,
     )
     summary = engine.run()
     _output_results(summary, url, pre_spike + spike_duration + post_spike, json_output)

@@ -25,12 +25,16 @@ class TestConfig:
     concurrency: int
     duration_secs: int
     timeout_secs: int
+    chaos: bool
+    chaos_rate: float
     def __init__(
         self,
         url: str,
         concurrency: int = 10,
         duration_secs: int = 10,
         timeout_secs: int = 10,
+        chaos: bool = False,
+        chaos_rate: float = 0.1,
     ) -> None: ...
 
 class TestSummary:
@@ -48,5 +52,5 @@ class TestSummary:
 def init_logging(level: str, log_file: str | None = None) -> None: ...
 def run_load_test(config: TestConfig) -> TestSummary: ...
 def run_load_profiles(
-    url: str, timeout_secs: int, profile: LoadProfile
+    url: str, timeout_secs: int, profile: LoadProfile, chaos: bool = False
 ) -> TestSummary: ...

@@ -4,7 +4,12 @@ use std::time::{Duration, Instant};
 
 use tokio_util::sync::CancellationToken;
 
+use crate::chaos::{ChaosEngine, ChaosFault};
 use crate::metrics::{LiveCounters, RequestMetric};
+
+static CORRUPTED_BODY: &[u8] = b"{\"payload\": \"\\xff\\xfe\\xbd\\xef\"}";
+static CHAOS_HEADER: &str = "x-chaos-fault";
+static BAD_HEADER_VALUE: &str = "invalid-header-value";
 
 pub async fn worker_loop(
     client: reqwest::Client,
@@ -13,11 +18,11 @@ pub async fn worker_loop(
     tx: tokio::sync::mpsc::Sender<RequestMetric>,
     duration: Duration,
     token: CancellationToken,
+    chaos: ChaosEngine,
 ) {
     tracing::debug!("worker spawned");
 
     // Pre-warm: establish TCP/TLS connection before measurement starts.
-    // Failures are silently ignored — the worker loop will retry.
     tracing::trace!("pre-warming connection");
     let _ = client.get(&url).send().await;
 
@@ -27,7 +32,33 @@ pub async fn worker_loop(
         counters.total_requests.fetch_add(1, Ordering::Relaxed);
 
         let req_start = Instant::now();
-        let (status_code, is_error) = match client.get(&url).send().await {
+
+        let request = match chaos.select_fault() {
+            Some(ChaosFault::LatencySpike { duration_ms }) => {
+                tracing::trace!(duration_ms, "chaos: latency spike injected");
+                tokio::time::sleep(Duration::from_millis(duration_ms)).await;
+                client.get(&url)
+            }
+            Some(ChaosFault::CorruptedPayload) => {
+                tracing::trace!("chaos: corrupted payload injected");
+                client
+                    .post(&url)
+                    .header(CHAOS_HEADER, "corrupted-payload")
+                    .body(CORRUPTED_BODY)
+            }
+            Some(ChaosFault::MetadataCorruption) => {
+                tracing::trace!("chaos: metadata corruption injected");
+                client.get(&url).header(CHAOS_HEADER, BAD_HEADER_VALUE)
+            }
+            Some(ChaosFault::ConnectionDrop) => {
+                tracing::trace!("chaos: connection drop injected");
+                // 1ns timeout forces reqwest to immediately abort with a timeout error
+                client.get(&url).timeout(Duration::from_nanos(1))
+            }
+            None => client.get(&url),
+        };
+
+        let (status_code, is_error) = match request.send().await {
             Ok(res) => {
                 let code = res.status().as_u16();
                 let errored = !res.status().is_success();
