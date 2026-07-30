@@ -1,3 +1,4 @@
+use crate::chaos::DEFAULT_CHAOS_RATE;
 use pyo3::prelude::*;
 use std::time::Duration;
 
@@ -12,18 +13,31 @@ pub struct TestConfig {
     pub duration_secs: u64,
     #[pyo3(get, set)]
     pub timeout_secs: u64,
+    #[pyo3(get, set)]
+    pub chaos: bool,
+    #[pyo3(get, set)]
+    pub chaos_rate: f32,
 }
 
 #[pymethods]
 impl TestConfig {
     #[new]
-    #[pyo3(signature = (url, concurrency=10, duration_secs=10, timeout_secs=10))]
-    pub fn new(url: String, concurrency: usize, duration_secs: u64, timeout_secs: u64) -> Self {
+    #[pyo3(signature = (url, concurrency=10, duration_secs=10, timeout_secs=10, chaos=false, chaos_rate = DEFAULT_CHAOS_RATE))]
+    pub fn new(
+        url: String,
+        concurrency: usize,
+        duration_secs: u64,
+        timeout_secs: u64,
+        chaos: bool,
+        chaos_rate: f32,
+    ) -> Self {
         Self {
             url,
             concurrency,
             duration_secs,
             timeout_secs,
+            chaos,
+            chaos_rate,
         }
     }
 }
@@ -168,29 +182,34 @@ mod tests {
 
     #[test]
     fn new_with_defaults() {
-        let c = TestConfig::new("http://example.com".into(), 10, 10, 10);
-        assert_eq!(c.url, "http://example.com");
+        let c = TestConfig::new("http://127.0.0.1:8080".into(), 10, 10, 10, false, 0.1);
+        assert_eq!(c.url, "http://127.0.0.1:8080");
         assert_eq!(c.concurrency, 10);
         assert_eq!(c.duration_secs, 10);
         assert_eq!(c.timeout_secs, 10);
+        assert!(!c.chaos);
+        assert_eq!(c.chaos_rate, 0.1);
     }
 
     #[test]
     fn new_with_custom_values() {
-        let c = TestConfig::new("http://test.io".into(), 50, 30, 5);
-        assert_eq!(c.url, "http://test.io");
+        let c = TestConfig::new("http://127.0.0.1:8080".into(), 50, 30, 5, true, 0.25);
+        assert_eq!(c.url, "http://127.0.0.1:8080");
         assert_eq!(c.concurrency, 50);
         assert_eq!(c.duration_secs, 30);
         assert_eq!(c.timeout_secs, 5);
+        assert!(c.chaos);
+        assert_eq!(c.chaos_rate, 0.25);
     }
 
     #[test]
     fn fields_are_gettable() {
-        let c = TestConfig::new("http://a.com".into(), 1, 2, 3);
-        assert_eq!(c.url, "http://a.com");
+        let c = TestConfig::new("http://127.0.0.1:8080".into(), 1, 2, 3, false, 0.1);
+        assert_eq!(c.url, "http://127.0.0.1:8080");
         assert_eq!(c.concurrency, 1);
         assert_eq!(c.duration_secs, 2);
         assert_eq!(c.timeout_secs, 3);
+        assert_eq!(c.chaos_rate, 0.1);
     }
 
     // LoadProfile tests
