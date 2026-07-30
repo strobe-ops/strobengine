@@ -17,12 +17,14 @@ pub struct TestConfig {
     pub chaos: bool,
     #[pyo3(get, set)]
     pub chaos_rate: f32,
+    #[pyo3(get, set)]
+    pub no_progress: bool,
 }
 
 #[pymethods]
 impl TestConfig {
     #[new]
-    #[pyo3(signature = (url, concurrency=10, duration_secs=10, timeout_secs=10, chaos=false, chaos_rate = DEFAULT_CHAOS_RATE))]
+    #[pyo3(signature = (url, concurrency=10, duration_secs=10, timeout_secs=10, chaos=false, chaos_rate = DEFAULT_CHAOS_RATE, no_progress=false))]
     pub fn new(
         url: String,
         concurrency: usize,
@@ -30,6 +32,7 @@ impl TestConfig {
         timeout_secs: u64,
         chaos: bool,
         chaos_rate: f32,
+        no_progress: bool,
     ) -> Self {
         Self {
             url,
@@ -38,6 +41,7 @@ impl TestConfig {
             timeout_secs,
             chaos,
             chaos_rate,
+            no_progress,
         }
     }
 }
@@ -182,7 +186,15 @@ mod tests {
 
     #[test]
     fn new_with_defaults() {
-        let c = TestConfig::new("http://127.0.0.1:8080".into(), 10, 10, 10, false, 0.1);
+        let c = TestConfig::new(
+            "http://127.0.0.1:8080".into(),
+            10,
+            10,
+            10,
+            false,
+            0.1,
+            false,
+        );
         assert_eq!(c.url, "http://127.0.0.1:8080");
         assert_eq!(c.concurrency, 10);
         assert_eq!(c.duration_secs, 10);
@@ -193,7 +205,7 @@ mod tests {
 
     #[test]
     fn new_with_custom_values() {
-        let c = TestConfig::new("http://127.0.0.1:8080".into(), 50, 30, 5, true, 0.25);
+        let c = TestConfig::new("http://127.0.0.1:8080".into(), 50, 30, 5, true, 0.25, false);
         assert_eq!(c.url, "http://127.0.0.1:8080");
         assert_eq!(c.concurrency, 50);
         assert_eq!(c.duration_secs, 30);
@@ -204,7 +216,7 @@ mod tests {
 
     #[test]
     fn fields_are_gettable() {
-        let c = TestConfig::new("http://127.0.0.1:8080".into(), 1, 2, 3, false, 0.1);
+        let c = TestConfig::new("http://127.0.0.1:8080".into(), 1, 2, 3, false, 0.1, false);
         assert_eq!(c.url, "http://127.0.0.1:8080");
         assert_eq!(c.concurrency, 1);
         assert_eq!(c.duration_secs, 2);
