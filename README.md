@@ -85,6 +85,9 @@ strobengine spike http://localhost:8080/api/health --baseline 5 --peak 1000 --pr
 
 # JSON output for CI/CD
 strobengine load http://localhost:8080/api/health --json
+
+# Chaos/fault injection test (~10% of requests get faults)
+strobengine load http://localhost:8080/api/health --chaos
 ```
 
 By default, this spawns **10 concurrent workers** for **10 seconds** with a **10-second request timeout**. Results are displayed as a formatted table with total requests, errors, requests/sec, and latency percentiles (avg, p95, p99).
@@ -104,6 +107,7 @@ By default, this spawns **10 concurrent workers** for **10 seconds** with a **10
 | `-c`, `--concurrency` | `10` | Number of concurrent workers |
 | `-d`, `--duration` | `10` | Duration in seconds |
 | `-t`, `--timeout` | `10` | Per-request timeout in seconds |
+| `--chaos` | off | Enable fault injection (~10% of requests) |
 | `--json` | off | Output raw JSON instead of formatted table |
 
 ### Stress Subcommand Options
@@ -115,6 +119,7 @@ By default, this spawns **10 concurrent workers** for **10 seconds** with a **10
 | `--ramp` | `60` | Ramp duration in seconds |
 | `--hold` | `30` | Hold duration at target concurrency |
 | `-t`, `--timeout` | `10` | Per-request timeout in seconds |
+| `--chaos` | off | Enable fault injection (~10% of requests) |
 | `--json` | off | Output raw JSON |
 
 ### Spike Subcommand Options
@@ -127,6 +132,7 @@ By default, this spawns **10 concurrent workers** for **10 seconds** with a **10
 | `--spike-duration` | `10` | Spike duration in seconds |
 | `--post-spike` | `5` | Post-spike duration in seconds |
 | `-t`, `--timeout` | `10` | Per-request timeout in seconds |
+| `--chaos` | off | Enable fault injection (~10% of requests) |
 | `--json` | off | Output raw JSON |
 
 ### Global Options
