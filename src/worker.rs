@@ -11,6 +11,15 @@ static CORRUPTED_BODY: &[u8] = b"{\"payload\": \"\\xff\\xfe\\xbd\\xef\"}";
 static CHAOS_HEADER: &str = "x-chaos-fault";
 static BAD_HEADER_VALUE: &str = "invalid-header-value";
 
+/// RAII Guard that automatically decrements `active_workers` when dropped.
+struct WorkerGuard(Arc<LiveCounters>);
+
+impl Drop for WorkerGuard {
+    fn drop(&mut self) {
+        self.0.active_workers.fetch_sub(1, Ordering::Relaxed);
+    }
+}
+
 pub async fn worker_loop(
     client: reqwest::Client,
     url: String,
@@ -21,6 +30,9 @@ pub async fn worker_loop(
     chaos: ChaosEngine,
 ) {
     tracing::debug!("worker spawned");
+
+    counters.active_workers.fetch_add(1, Ordering::Relaxed);
+    let _guard = WorkerGuard(Arc::clone(&counters));
 
     // Pre-warm: establish TCP/TLS connection before measurement starts.
     tracing::trace!("pre-warming connection");
@@ -77,17 +89,26 @@ pub async fn worker_loop(
             }
         };
 
+        let latency_micros = u64::try_from(req_start.elapsed().as_micros()).unwrap_or(u64::MAX);
+
         if tracing::enabled!(tracing::Level::TRACE) {
             tracing::trace!(
                 status = status_code,
-                latency_us = req_start.elapsed().as_micros(),
+                latency_us = latency_micros,
                 "request completed"
             );
         }
 
+        // Update live counters for progress rendering
+        counters.completed_requests.fetch_add(1, Ordering::Relaxed);
+        counters
+            .latency_sum_micros
+            .fetch_add(latency_micros, Ordering::Relaxed);
+        counters.latency_count.fetch_add(1, Ordering::Relaxed);
+
         let metric = RequestMetric {
             status_code,
-            latency_micros: req_start.elapsed().as_micros(),
+            latency_micros: latency_micros as u128,
             is_error,
         };
 
