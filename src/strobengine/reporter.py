@@ -24,6 +24,7 @@ def print_summary(
         _print_rich(summary, url, duration_secs)
     else:
         _print_plain(summary, url, duration_secs)
+    _metrics_description()
 
 
 def _format_number(n: int) -> str:
@@ -121,3 +122,16 @@ def _print_plain(
     lines.append(sep)
 
     print("\n".join(lines))
+
+
+def _metrics_description():
+    print("Metric Descriptions:")
+    print(
+        "- Avg Latency: Mean round-trip time across all completed requests (lower is better)."
+    )
+    print(
+        "- P95 Latency: 95% of requests completed faster than this time (tail latency, lower is better)."
+    )
+    print(
+        "- P99 Latency: 99% of requests completed faster than this time (worst-case spikes)."
+    )
