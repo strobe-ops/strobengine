@@ -27,6 +27,7 @@ class TestConfig:
     timeout_secs: int
     chaos: bool
     chaos_rate: float
+    no_progress: bool
     def __init__(
         self,
         url: str,
@@ -35,6 +36,7 @@ class TestConfig:
         timeout_secs: int = 10,
         chaos: bool = False,
         chaos_rate: float = 0.1,
+        no_progress: bool = False,
     ) -> None: ...
 
 class TestSummary:
@@ -52,5 +54,10 @@ class TestSummary:
 def init_logging(level: str, log_file: str | None = None) -> None: ...
 def run_load_test(config: TestConfig) -> TestSummary: ...
 def run_load_profiles(
-    url: str, timeout_secs: int, profile: LoadProfile, chaos: bool = False
+    url: str,
+    timeout_secs: int,
+    profile: LoadProfile,
+    chaos: bool = False,
+    chaos_rate: float = 0.1,
+    no_progress: bool = False,
 ) -> TestSummary: ...

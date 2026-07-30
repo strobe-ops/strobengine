@@ -136,6 +136,9 @@ def load(
     chaos: Annotated[
         bool, typer.Option("--chaos", help="Enable fault injection (~10%% of requests)")
     ] = False,
+    no_progress: Annotated[
+        bool, typer.Option("--no-progress", help="Suppress live progress output")
+    ] = False,
     json_output: Annotated[
         bool, typer.Option("--json", help="Output raw JSON results")
     ] = False,
@@ -146,6 +149,7 @@ def load(
         duration=duration,
         timeout=timeout,
         chaos=chaos,
+        no_progress=no_progress,
     )
     summary = engine.run()
     _output_results(summary, url, duration, json_output)
@@ -177,6 +181,9 @@ def stress(
     chaos: Annotated[
         bool, typer.Option("--chaos", help="Enable fault injection (~10%% of requests)")
     ] = False,
+    no_progress: Annotated[
+        bool, typer.Option("--no-progress", help="Suppress live progress output")
+    ] = False,
     json_output: Annotated[
         bool, typer.Option("--json", help="Output raw JSON results")
     ] = False,
@@ -189,6 +196,7 @@ def stress(
         hold_duration=hold,
         timeout=timeout,
         chaos=chaos,
+        no_progress=no_progress,
     )
     summary = engine.run()
     _output_results(summary, url, ramp + hold, json_output)
@@ -224,6 +232,9 @@ def spike(
     chaos: Annotated[
         bool, typer.Option("--chaos", help="Enable fault injection (~10%% of requests)")
     ] = False,
+    no_progress: Annotated[
+        bool, typer.Option("--no-progress", help="Suppress live progress output")
+    ] = False,
     json_output: Annotated[
         bool, typer.Option("--json", help="Output raw JSON results")
     ] = False,
@@ -237,6 +248,7 @@ def spike(
         post_spike_duration=post_spike,
         timeout=timeout,
         chaos=chaos,
+        no_progress=no_progress,
     )
     summary = engine.run()
     _output_results(summary, url, pre_spike + spike_duration + post_spike, json_output)
