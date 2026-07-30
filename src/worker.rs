@@ -78,13 +78,13 @@ pub async fn worker_loop(
                 let _ = res.bytes().await;
                 if errored {
                     counters.errors.fetch_add(1, Ordering::Relaxed);
-                    tracing::warn!(status_code = code, "non-success HTTP status");
+                    tracing::debug!(status_code = code, "non-success HTTP status");
                 }
                 (code, errored)
             }
             Err(_) => {
                 counters.errors.fetch_add(1, Ordering::Relaxed);
-                tracing::warn!("request failed");
+                tracing::debug!("request failed");
                 (0, true)
             }
         };
