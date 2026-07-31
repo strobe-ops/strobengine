@@ -2,6 +2,9 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
+use bytes::Bytes;
+use http::Method;
+use reqwest::Url;
 use tokio_util::sync::CancellationToken;
 
 use crate::chaos::{ChaosEngine, ChaosFault};
@@ -20,9 +23,25 @@ impl Drop for WorkerGuard {
     }
 }
 
+pub async fn prewarm(client: &reqwest::Client, url: &str, method: &Method, body: &Option<Bytes>) {
+    // Build request with actual target method
+    let mut prewarm_req = client.request(method.clone(), url);
+
+    // Attach body if present so servers requiring payload validation don't close connection early
+    if let Some(b) = body {
+        prewarm_req = prewarm_req.body(b.clone());
+    }
+
+    // Best-effort send: ignore network/HTTP errors during pre-warming
+    let _ = prewarm_req.send().await;
+}
+
+#[allow(clippy::too_many_arguments)]
 pub async fn worker_loop(
     client: reqwest::Client,
     url: String,
+    method: Method,
+    body: Option<Bytes>,
     counters: Arc<LiveCounters>,
     tx: tokio::sync::mpsc::Sender<RequestMetric>,
     duration: Duration,
@@ -34,9 +53,18 @@ pub async fn worker_loop(
     counters.active_workers.fetch_add(1, Ordering::Relaxed);
     let _guard = WorkerGuard(Arc::clone(&counters));
 
-    // Pre-warm: establish TCP/TLS connection before measurement starts.
+    // Pre-warm: always HEAD regardless of test method to avoid side effects
     tracing::trace!("pre-warming connection");
-    let _ = client.get(&url).send().await;
+    prewarm(&client, &url, &method, &body).await;
+
+    // Parse URL ONCE before entering the hot path
+    let target_url = match Url::parse(&url) {
+        Ok(u) => u,
+        Err(e) => {
+            tracing::error!(error = %e, "failed to parse URL in worker");
+            return;
+        }
+    };
 
     let start = Instant::now();
 
@@ -45,14 +73,24 @@ pub async fn worker_loop(
 
         let req_start = Instant::now();
 
+        // Zero-allocation request builder closure
+        let base_request = || {
+            let mut req = client.request(method.clone(), target_url.clone());
+            if let Some(ref b) = body {
+                req = req.body(b.clone()); // Bytes clone = ref-count increment
+            }
+            req
+        };
+
         let request = match chaos.select_fault() {
             Some(ChaosFault::LatencySpike { duration_ms }) => {
                 tracing::trace!(duration_ms, "chaos: latency spike injected");
                 tokio::time::sleep(Duration::from_millis(duration_ms)).await;
-                client.get(&url)
+                base_request()
             }
             Some(ChaosFault::CorruptedPayload) => {
                 tracing::trace!("chaos: corrupted payload injected");
+                // Override: always POST with corrupted body
                 client
                     .post(&url)
                     .header(CHAOS_HEADER, "corrupted-payload")
@@ -60,14 +98,13 @@ pub async fn worker_loop(
             }
             Some(ChaosFault::MetadataCorruption) => {
                 tracing::trace!("chaos: metadata corruption injected");
-                client.get(&url).header(CHAOS_HEADER, BAD_HEADER_VALUE)
+                base_request().header(CHAOS_HEADER, BAD_HEADER_VALUE)
             }
             Some(ChaosFault::ConnectionDrop) => {
                 tracing::trace!("chaos: connection drop injected");
-                // 1ns timeout forces reqwest to immediately abort with a timeout error
-                client.get(&url).timeout(Duration::from_nanos(1))
+                base_request().timeout(Duration::from_nanos(1))
             }
-            None => client.get(&url),
+            None => base_request(),
         };
 
         let (status_code, is_error) = match request.send().await {

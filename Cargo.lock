@@ -1255,7 +1255,9 @@ checksum = "6ce2be8dc25455e1f91df71bfa12ad37d7af1092ae736f3a6cd0e37bc7810596"
 name = "strobengine"
 version = "0.1.0"
 dependencies = [
+ "bytes",
  "fastrand",
+ "http",
  "indicatif",
  "mimalloc",
  "pyo3",

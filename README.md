@@ -20,6 +20,8 @@ A high-performance HTTP load testing engine with a Python API and a bare-metal R
 | tracing-subscriber | 0.3 | Log formatting and output (stderr/file) |
 | indicatif | 0.17 | Terminal progress bar rendering |
 | fastrand | 2 | Fast random number generation for chaos injection |
+| http | 1 | HTTP method types and header primitives |
+| bytes | 1 | Zero-copy byte buffer for request payloads |
 
 ## Installation & Compilation
 
@@ -65,6 +67,15 @@ engine = StrobEngine.spike_test(
 summary = engine.run()
 
 print_summary(summary, url=engine._url, duration_secs=30)
+
+# POST request with JSON body and custom headers
+engine = StrobEngine(
+    url="http://localhost:8080/api/data",
+    method="POST",
+    body='{"name": "test", "value": 42}',
+    headers={"Authorization": "Bearer token123"},
+)
+summary = engine.run()
 ```
 
 For async contexts (FastAPI, Typer, etc.):
@@ -91,6 +102,16 @@ strobengine load http://localhost:8080/api/health --json
 # Chaos/fault injection test (~10% of requests get faults)
 strobengine load http://localhost:8080/api/health --chaos
 
+# POST with JSON body
+strobengine load http://localhost:8080/api/data --method POST --body '{"key": "val"}'
+
+# PUT with custom headers
+strobengine load http://localhost:8080/api/resource/1 \
+  --method PUT --body '{"name": "updated"}' --header "Authorization: Bearer token"
+
+# DELETE
+strobengine load http://localhost:8080/api/resource/1 --method DELETE
+
 # Verbose debug output
 strobengine load http://localhost:8080/api/health -vv
 
@@ -115,6 +136,9 @@ By default, this spawns **10 concurrent workers** for **10 seconds** with a **10
 | `-c`, `--concurrency` | `10` | Number of concurrent workers |
 | `-d`, `--duration` | `10` | Duration in seconds |
 | `-t`, `--timeout` | `10` | Per-request timeout in seconds |
+| `--method` | `GET` | HTTP method (GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS) |
+| `--body` | none | Request body (raw string) |
+| `--header` | none | Custom header key:value (repeatable) |
 | `--chaos` | off | Enable fault injection (~10% of requests) |
 | `--no-progress` | off | Suppress live progress bar |
 | `-v`, `-vv`, `-vvv` | warn | Increase verbosity (INFO, DEBUG, TRACE) |
@@ -131,6 +155,9 @@ By default, this spawns **10 concurrent workers** for **10 seconds** with a **10
 | `--ramp` | `60` | Ramp duration in seconds |
 | `--hold` | `30` | Hold duration at target concurrency |
 | `-t`, `--timeout` | `10` | Per-request timeout in seconds |
+| `--method` | `GET` | HTTP method (GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS) |
+| `--body` | none | Request body (raw string) |
+| `--header` | none | Custom header key:value (repeatable) |
 | `--chaos` | off | Enable fault injection (~10% of requests) |
 | `--no-progress` | off | Suppress live progress bar |
 | `-v`, `-vv`, `-vvv` | warn | Increase verbosity (INFO, DEBUG, TRACE) |
@@ -148,6 +175,9 @@ By default, this spawns **10 concurrent workers** for **10 seconds** with a **10
 | `--spike-duration` | `10` | Spike duration in seconds |
 | `--post-spike` | `5` | Post-spike duration in seconds |
 | `-t`, `--timeout` | `10` | Per-request timeout in seconds |
+| `--method` | `GET` | HTTP method (GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS) |
+| `--body` | none | Request body (raw string) |
+| `--header` | none | Custom header key:value (repeatable) |
 | `--chaos` | off | Enable fault injection (~10% of requests) |
 | `--no-progress` | off | Suppress live progress bar |
 | `-v`, `-vv`, `-vvv` | warn | Increase verbosity (INFO, DEBUG, TRACE) |
@@ -160,6 +190,8 @@ By default, this spawns **10 concurrent workers** for **10 seconds** with a **10
 | Flag | Description |
 |------|-------------|
 | `-V`, `--version` | Show version and exit |
+
+> **HTTP Methods, Bodies & Headers:** See [docs/http_methods.md](docs/http_methods.md) for detailed documentation on supported HTTP methods, request body handling, custom headers, and performance characteristics.
 
 ### Live Progress Bar
 
@@ -197,7 +229,7 @@ strobengine load http://localhost:8080/api/health -vv --json > results.json
 strobengine separates configuration, execution, and metrics into clean Rust modules, exposed to Python via PyO3:
 
 - **`config`** -- `TestConfig` for static load, `LoadProfile` enum for dynamic profiles (Constant, Ramp, Spike) with target concurrency interpolation.
-- **`worker`** -- Async worker loops accepting `CancellationToken` for graceful shutdown. Workers finish in-flight requests before exiting.
+- **`worker`** -- Async worker loops with method-aware request building, static payload reuse (Bytes), and zero-allocation header management via `ClientBuilder::default_headers()`.
 - **`metrics`** -- Lock-free atomic counters (`AtomicUsize`) track total requests and errors without contention. An aggregator task collects raw latencies, then `calculate_summary` computes average, p95, and p99 percentiles in Rust at bare-metal speed.
 - **`chaos`** -- Protocol-agnostic fault injection engine with `ChaosEngine` evaluator and `ChaosFault` enum (LatencySpike, CorruptedPayload, MetadataCorruption, ConnectionDrop).
 - **`progress`** -- Background Tokio render task sampling atomic metrics every 200ms, displaying live RPS, active VUs, and latency via indicatif.

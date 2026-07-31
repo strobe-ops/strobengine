@@ -19,11 +19,17 @@ class StrobEngine:
         profile: LoadProfile | None = None,
         chaos: bool = False,
         no_progress: bool = False,
+        method: str = "GET",
+        body: str | None = None,
+        headers: list[tuple[str, str]] | None = None,
     ) -> None:
         self._url = url
         self._timeout = timeout
         self._chaos = chaos
         self._no_progress = no_progress
+        self._method = method
+        self._body = body
+        self._headers = headers
 
         if profile is None:
             if concurrency <= 0:
@@ -40,6 +46,9 @@ class StrobEngine:
                 timeout_secs=timeout,
                 chaos=chaos,
                 no_progress=no_progress,
+                method=method,
+                body=body,
+                headers=headers,
             )
             self._profile = None
         else:
@@ -58,6 +67,9 @@ class StrobEngine:
         timeout: int = 10,
         chaos: bool = False,
         no_progress: bool = False,
+        method: str = "GET",
+        body: str | None = None,
+        headers: list[tuple[str, str]] | None = None,
     ) -> "StrobEngine":
         return cls(
             url=url,
@@ -66,6 +78,9 @@ class StrobEngine:
             timeout=timeout,
             chaos=chaos,
             no_progress=no_progress,
+            method=method,
+            body=body,
+            headers=headers,
         )
 
     @classmethod
@@ -79,6 +94,9 @@ class StrobEngine:
         timeout: int = 10,
         chaos: bool = False,
         no_progress: bool = False,
+        method: str = "GET",
+        body: str | None = None,
+        headers: list[tuple[str, str]] | None = None,
     ) -> "StrobEngine":
         if start_concurrency <= 0:
             raise ValueError("start_concurrency must be greater than 0")
@@ -103,6 +121,9 @@ class StrobEngine:
             profile=profile,
             chaos=chaos,
             no_progress=no_progress,
+            method=method,
+            body=body,
+            headers=headers,
         )
 
     @classmethod
@@ -117,6 +138,9 @@ class StrobEngine:
         timeout: int = 10,
         chaos: bool = False,
         no_progress: bool = False,
+        method: str = "GET",
+        body: str | None = None,
+        headers: list[tuple[str, str]] | None = None,
     ) -> "StrobEngine":
         if baseline <= 0:
             raise ValueError("baseline must be greater than 0")
@@ -142,6 +166,9 @@ class StrobEngine:
             profile=profile,
             chaos=chaos,
             no_progress=no_progress,
+            method=method,
+            body=body,
+            headers=headers,
         )
 
     def run(self) -> TestSummary:
@@ -152,6 +179,9 @@ class StrobEngine:
                 self._profile,
                 self._chaos,
                 no_progress=self._no_progress,
+                method=self._method,
+                body=self._body,
+                headers=self._headers,
             )
         return run_load_test(self.config)
 

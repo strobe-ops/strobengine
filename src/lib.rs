@@ -15,6 +15,8 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
+use http::Method;
+use http::header::{CONTENT_TYPE, HeaderMap, HeaderName, HeaderValue};
 use pyo3::prelude::*;
 use tokio_util::sync::CancellationToken;
 
@@ -22,7 +24,38 @@ use crate::chaos::ChaosEngine;
 use crate::config::{LoadProfile, TestConfig};
 use crate::metrics::{LiveCounters, RequestMetric};
 
-fn build_client(concurrency: usize, timeout_secs: u64) -> reqwest::Client {
+fn parse_method(method_str: &str) -> PyResult<Method> {
+    method_str.to_uppercase().parse().map_err(|_| {
+        pyo3::exceptions::PyValueError::new_err(format!("Invalid HTTP method: {method_str}"))
+    })
+}
+
+fn parse_body(body: Option<String>) -> Option<bytes::Bytes> {
+    body.map(bytes::Bytes::from)
+}
+
+fn parse_headers(headers: Option<Vec<(String, String)>>) -> PyResult<HeaderMap> {
+    let mut header_map = HeaderMap::new();
+
+    if let Some(h) = headers {
+        for (k, v) in h {
+            let name = HeaderName::from_bytes(k.as_bytes()).map_err(|e| {
+                pyo3::exceptions::PyValueError::new_err(format!("Invalid header name '{k}': {e}"))
+            })?;
+
+            let val = HeaderValue::from_str(&v).map_err(|e| {
+                pyo3::exceptions::PyValueError::new_err(format!(
+                    "Invalid header value for '{k}': {e}"
+                ))
+            })?;
+
+            header_map.append(name, val);
+        }
+    }
+    Ok(header_map)
+}
+
+fn build_client(concurrency: usize, timeout_secs: u64, header_map: HeaderMap) -> reqwest::Client {
     reqwest::Client::builder()
         .pool_max_idle_per_host(concurrency)
         .timeout(Duration::from_secs(timeout_secs))
@@ -30,6 +63,7 @@ fn build_client(concurrency: usize, timeout_secs: u64) -> reqwest::Client {
         .tcp_nodelay(true)
         .http2_keep_alive_interval(Duration::from_secs(10))
         .http2_keep_alive_timeout(Duration::from_secs(5))
+        .default_headers(header_map)
         .build()
         .expect("failed to build HTTP client")
 }
@@ -40,6 +74,7 @@ fn init_logging(level: String, log_file: Option<String>) {
 }
 
 #[pyfunction]
+#[allow(clippy::too_many_arguments)]
 fn run_load_test(py: Python<'_>, config: TestConfig) -> PyResult<metrics::TestSummary> {
     py.detach(move || {
         let url = config.url;
@@ -49,13 +84,23 @@ fn run_load_test(py: Python<'_>, config: TestConfig) -> PyResult<metrics::TestSu
         let chaos = ChaosEngine::new(config.chaos, config.chaos_rate);
         let no_progress = config.no_progress;
 
+        // Parse and validate HTTP method, body, headers before test starts
+        let method = parse_method(&config.method)?;
+        let body = parse_body(config.body);
+        let mut header_map = parse_headers(config.headers)?;
+
+        // Auto-insert Content-Type when body is present
+        if body.is_some() && !header_map.contains_key(CONTENT_TYPE) {
+            header_map.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+        }
+
         tracing::info!(
             url,
             concurrency,
             duration_secs,
             timeout_secs,
+            method = %method,
             chaos = config.chaos,
-            chaos_rate = config.chaos_rate,
             "starting constant load test"
         );
 
@@ -65,7 +110,7 @@ fn run_load_test(py: Python<'_>, config: TestConfig) -> PyResult<metrics::TestSu
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
 
         rt.block_on(async move {
-            let client = build_client(concurrency, timeout_secs);
+            let client = build_client(concurrency, timeout_secs, header_map);
 
             tracing::debug!("http client created");
 
@@ -107,6 +152,8 @@ fn run_load_test(py: Python<'_>, config: TestConfig) -> PyResult<metrics::TestSu
                     tokio::spawn(worker::worker_loop(
                         client.clone(),
                         url.clone(),
+                        method.clone(),
+                        body.clone(),
                         Arc::clone(&counters),
                         tx.clone(),
                         duration,
@@ -145,7 +192,18 @@ fn run_load_test(py: Python<'_>, config: TestConfig) -> PyResult<metrics::TestSu
 }
 
 #[pyfunction]
-#[pyo3(signature = (url, timeout_secs, profile, chaos=false, chaos_rate=crate::chaos::DEFAULT_CHAOS_RATE, no_progress=false))]
+#[pyo3(signature = (
+    url,
+    timeout_secs,
+    profile,
+    chaos=false,
+    chaos_rate=crate::chaos::DEFAULT_CHAOS_RATE,
+    no_progress=false,
+    method="GET",
+    body=None,
+    headers=None,
+))]
+#[allow(clippy::too_many_arguments)]
 fn run_load_profiles(
     py: Python<'_>,
     url: String,
@@ -154,17 +212,31 @@ fn run_load_profiles(
     chaos: bool,
     chaos_rate: f32,
     no_progress: bool,
+    method: &str,
+    body: Option<String>,
+    headers: Option<Vec<(String, String)>>,
 ) -> PyResult<metrics::TestSummary> {
     py.detach(move || {
         let max_concurrency = profile.max_concurrency();
         let total_duration_secs = profile.total_duration();
         let chaos_engine = ChaosEngine::new(chaos, chaos_rate);
 
+        // Parse and validate HTTP method, body, headers before test starts
+        let method = parse_method(method)?;
+        let body = parse_body(body);
+        let mut header_map = parse_headers(headers)?;
+
+        // Auto-insert Content-Type when body is present
+        if body.is_some() && !header_map.contains_key(CONTENT_TYPE) {
+            header_map.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+        }
+
         tracing::info!(
             url,
             timeout_secs,
             max_concurrency,
             total_duration_secs,
+            method = %method,
             chaos,
             "starting profile load test"
         );
@@ -175,7 +247,7 @@ fn run_load_profiles(
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
 
         rt.block_on(async move {
-            let client = build_client(max_concurrency, timeout_secs);
+            let client = build_client(max_concurrency, timeout_secs, header_map);
 
             tracing::debug!("http client created");
 
@@ -234,6 +306,8 @@ fn run_load_profiles(
                         let handle = tokio::spawn(worker::worker_loop(
                             client_clone.clone(),
                             url_clone.clone(),
+                            method.clone(),
+                            body.clone(),
                             Arc::clone(&counters_clone),
                             tx.clone(),
                             remaining,

@@ -1,6 +1,7 @@
+use std::time::Duration;
+
 use crate::chaos::DEFAULT_CHAOS_RATE;
 use pyo3::prelude::*;
-use std::time::Duration;
 
 #[pyclass(from_py_object)]
 #[derive(Clone)]
@@ -19,12 +20,30 @@ pub struct TestConfig {
     pub chaos_rate: f32,
     #[pyo3(get, set)]
     pub no_progress: bool,
+    #[pyo3(get, set)]
+    pub method: String,
+    #[pyo3(get, set)]
+    pub body: Option<String>,
+    #[pyo3(get, set)]
+    pub headers: Option<Vec<(String, String)>>,
 }
 
 #[pymethods]
 impl TestConfig {
     #[new]
-    #[pyo3(signature = (url, concurrency=10, duration_secs=10, timeout_secs=10, chaos=false, chaos_rate = DEFAULT_CHAOS_RATE, no_progress=false))]
+    #[pyo3(signature = (
+        url,
+        concurrency=10,
+        duration_secs=10,
+        timeout_secs=10,
+        chaos=false,
+        chaos_rate=DEFAULT_CHAOS_RATE,
+        no_progress=false,
+        method="GET",
+        body=None,
+        headers=None,
+    ))]
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         url: String,
         concurrency: usize,
@@ -33,6 +52,9 @@ impl TestConfig {
         chaos: bool,
         chaos_rate: f32,
         no_progress: bool,
+        method: &str,
+        body: Option<String>,
+        headers: Option<Vec<(String, String)>>,
     ) -> Self {
         Self {
             url,
@@ -42,6 +64,9 @@ impl TestConfig {
             chaos,
             chaos_rate,
             no_progress,
+            method: method.to_string(),
+            body,
+            headers,
         }
     }
 }
@@ -194,6 +219,9 @@ mod tests {
             false,
             0.1,
             false,
+            "GET",
+            None,
+            None,
         );
         assert_eq!(c.url, "http://127.0.0.1:8080");
         assert_eq!(c.concurrency, 10);
@@ -201,22 +229,51 @@ mod tests {
         assert_eq!(c.timeout_secs, 10);
         assert!(!c.chaos);
         assert_eq!(c.chaos_rate, 0.1);
+        assert_eq!(c.method, "GET");
+        assert!(c.body.is_none());
+        assert!(c.headers.is_none());
     }
 
     #[test]
     fn new_with_custom_values() {
-        let c = TestConfig::new("http://127.0.0.1:8080".into(), 50, 30, 5, true, 0.25, false);
+        let headers = vec![("X-Custom".to_string(), "value".to_string())];
+        let c = TestConfig::new(
+            "http://127.0.0.1:8080".into(),
+            50,
+            30,
+            5,
+            true,
+            0.25,
+            false,
+            "POST",
+            Some(r#"{"key":"val"}"#.into()),
+            Some(headers),
+        );
         assert_eq!(c.url, "http://127.0.0.1:8080");
         assert_eq!(c.concurrency, 50);
         assert_eq!(c.duration_secs, 30);
         assert_eq!(c.timeout_secs, 5);
         assert!(c.chaos);
         assert_eq!(c.chaos_rate, 0.25);
+        assert_eq!(c.method, "POST");
+        assert!(c.body.is_some());
+        assert!(c.headers.is_some());
     }
 
     #[test]
     fn fields_are_gettable() {
-        let c = TestConfig::new("http://127.0.0.1:8080".into(), 1, 2, 3, false, 0.1, false);
+        let c = TestConfig::new(
+            "http://127.0.0.1:8080".into(),
+            1,
+            2,
+            3,
+            false,
+            0.1,
+            false,
+            "GET",
+            None,
+            None,
+        );
         assert_eq!(c.url, "http://127.0.0.1:8080");
         assert_eq!(c.concurrency, 1);
         assert_eq!(c.duration_secs, 2);
@@ -285,13 +342,9 @@ mod tests {
             ramp_secs: 90,
             hold_secs: 10,
         };
-        // At t=0: start
         assert_eq!(p.target_concurrency(Duration::from_secs(0)), 10);
-        // At t=45 (halfway): ~55
         assert_eq!(p.target_concurrency(Duration::from_secs(45)), 55);
-        // At t=90 (end of ramp): target
         assert_eq!(p.target_concurrency(Duration::from_secs(90)), 100);
-        // At t=100 (during hold): target
         assert_eq!(p.target_concurrency(Duration::from_secs(100)), 100);
     }
 
@@ -339,13 +392,10 @@ mod tests {
             spike_secs: 20,
             post_spike_secs: 10,
         };
-        // Pre-spike
         assert_eq!(p.target_concurrency(Duration::from_secs(0)), 5);
         assert_eq!(p.target_concurrency(Duration::from_secs(9)), 5);
-        // Spike
         assert_eq!(p.target_concurrency(Duration::from_secs(10)), 500);
         assert_eq!(p.target_concurrency(Duration::from_secs(29)), 500);
-        // Post-spike
         assert_eq!(p.target_concurrency(Duration::from_secs(30)), 5);
         assert_eq!(p.target_concurrency(Duration::from_secs(39)), 5);
     }
