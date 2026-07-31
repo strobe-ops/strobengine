@@ -10,6 +10,8 @@ from strobengine._strobengine import init_logging
 from strobengine.engine import StrobEngine
 from strobengine.reporter import print_summary
 
+VALID_METHODS = {"GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"}
+
 
 def _get_version() -> str:
     from importlib.metadata import PackageNotFoundError, version
@@ -56,6 +58,35 @@ def _configure_logging(level: str, log_file: str | None = None) -> None:
     init_logging(level, log_file)
 
 
+def _parse_headers(header: list[str] | None) -> list[tuple[str, str]] | None:
+    """
+    Parses CLI header flags into a list of key-value tuples.
+    Preserves duplicate header names (e.g., multiple 'Set-Cookie' or 'Accept' flags).
+    """
+    if not header:
+        return None
+
+    parsed_headers: list[tuple[str, str]] = []
+
+    for h in header:
+        if ":" not in h:
+            raise typer.BadParameter(f"Header '{h}' must be in 'Key: Value' format.")
+        key, value = h.split(":", 1)
+        parsed_headers.append((key.strip(), value.strip()))
+    return parsed_headers
+
+
+def _validate_method(method: str) -> str:
+    """Normalizes and validates the HTTP method against supported verbs."""
+    upper_method = method.strip().upper()
+    if upper_method not in VALID_METHODS:
+        valid_list = ", ".join(sorted(VALID_METHODS))
+        raise typer.BadParameter(
+            f"Invalid HTTP method '{method}'. Must be one of: {valid_list}"
+        )
+    return upper_method
+
+
 app = typer.Typer(
     name="strobengine",
     help="High-performance load testing engine powered by Rust.",
@@ -65,7 +96,6 @@ app = typer.Typer(
 KNOWN_SUBCOMMANDS = {"load", "stress", "spike"}
 HELP_FLAGS = {"-h", "--help"}
 VERSION_FLAGS = {"-V", "--version"}
-LOG_FLAGS = {"-v", "--verbose", "-q", "--quiet", "--log-file"}
 
 
 @app.callback()
@@ -118,6 +148,20 @@ def load(
         int,
         typer.Option("-t", "--timeout", min=1, help="Request timeout in seconds"),
     ] = 10,
+    method: Annotated[
+        str,
+        typer.Option(
+            "--method",
+            help="HTTP method (GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS)",
+        ),
+    ] = "GET",
+    body: Annotated[
+        str | None, typer.Option("--body", help="Request body (raw string)")
+    ] = None,
+    header: Annotated[
+        list[str] | None,
+        typer.Option("--header", help="Custom header key:value (repeatable)"),
+    ] = None,
     chaos: Annotated[
         bool, typer.Option("--chaos", help="Enable fault injection (~10%% of requests)")
     ] = False,
@@ -139,6 +183,8 @@ def load(
     ] = None,
 ) -> None:
     _configure_logging(_resolve_log_level(verbose, quiet), log_file)
+    method = _validate_method(method)
+
     engine = StrobEngine.load_test(
         url=url,
         concurrency=concurrency,
@@ -146,6 +192,9 @@ def load(
         timeout=timeout,
         chaos=chaos,
         no_progress=no_progress,
+        method=method,
+        body=body,
+        headers=_parse_headers(header),
     )
     summary = engine.run()
     _output_results(summary, url, duration, json_output)
@@ -174,6 +223,20 @@ def stress(
         int,
         typer.Option("-t", "--timeout", help="Request timeout in seconds", min=1),
     ] = 10,
+    method: Annotated[
+        str,
+        typer.Option(
+            "--method",
+            help="HTTP method (GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS)",
+        ),
+    ] = "GET",
+    body: Annotated[
+        str | None, typer.Option("--body", help="Request body (raw string)")
+    ] = None,
+    header: Annotated[
+        list[str] | None,
+        typer.Option("--header", help="Custom header key:value (repeatable)"),
+    ] = None,
     chaos: Annotated[
         bool, typer.Option("--chaos", help="Enable fault injection (~10%% of requests)")
     ] = False,
@@ -195,6 +258,8 @@ def stress(
     ] = None,
 ) -> None:
     _configure_logging(_resolve_log_level(verbose, quiet), log_file)
+    method = _validate_method(method)
+
     engine = StrobEngine.stress_test(
         url=url,
         start_concurrency=start,
@@ -204,6 +269,9 @@ def stress(
         timeout=timeout,
         chaos=chaos,
         no_progress=no_progress,
+        method=method,
+        body=body,
+        headers=_parse_headers(header),
     )
     summary = engine.run()
     _output_results(summary, url, ramp + hold, json_output)
@@ -236,6 +304,20 @@ def spike(
         int,
         typer.Option("-t", "--timeout", help="Request timeout in seconds", min=1),
     ] = 10,
+    method: Annotated[
+        str,
+        typer.Option(
+            "--method",
+            help="HTTP method (GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS)",
+        ),
+    ] = "GET",
+    body: Annotated[
+        str | None, typer.Option("--body", help="Request body (raw string)")
+    ] = None,
+    header: Annotated[
+        list[str] | None,
+        typer.Option("--header", help="Custom header key:value (repeatable)"),
+    ] = None,
     chaos: Annotated[
         bool, typer.Option("--chaos", help="Enable fault injection (~10%% of requests)")
     ] = False,
@@ -257,6 +339,8 @@ def spike(
     ] = None,
 ) -> None:
     _configure_logging(_resolve_log_level(verbose, quiet), log_file)
+    method = _validate_method(method)
+
     engine = StrobEngine.spike_test(
         url=url,
         baseline=baseline,
@@ -267,6 +351,9 @@ def spike(
         timeout=timeout,
         chaos=chaos,
         no_progress=no_progress,
+        method=method,
+        body=body,
+        headers=_parse_headers(header),
     )
     summary = engine.run()
     _output_results(summary, url, pre_spike + spike_duration + post_spike, json_output)
@@ -279,7 +366,7 @@ def _first_positional(argv: list[str]) -> str | None:
             skip_next = False
             continue
         if arg.startswith("-"):
-            if arg in ("--log-file",):
+            if arg in ("--log-file", "--header"):
                 skip_next = True
             continue
         return arg
