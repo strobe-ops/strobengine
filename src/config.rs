@@ -236,8 +236,7 @@ mod tests {
 
     #[test]
     fn new_with_custom_values() {
-        let mut headers = HashMap::new();
-        headers.insert("X-Custom".into(), "value".into());
+        let headers = vec![("X-Custom".to_string(), "value".to_string())];
         let c = TestConfig::new(
             "http://127.0.0.1:8080".into(),
             50,
