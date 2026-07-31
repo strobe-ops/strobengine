@@ -9,16 +9,20 @@ This document outlines the planned trajectory and upcoming feature epics for **s
 ## Core Tooling & Distribution
 
 ### Epic: MVP Baseline Engine
-- [x] High-throughput HTTP execution core (Rust async runtime).
-- [x] Basic CLI flags (`-c`, `-d`, target URL).
-- [x] Initial benchmark suite against k6.
+- [x] High-throughput HTTP execution core (Rust async runtime). `[v0.1.0]`
+- [x] Basic CLI flags (`-c`, `-d`, target URL). `[v0.1.0]`
+- [x] Initial benchmark suite against k6. `[v0.1.0]`
+
+### Epic: Fault Injection & Resilience Testing (Chaos)
+
+- [x] Basic chaos testing support. `[Unreleased / main]`
 
 ### Epic: Real-Time Telemetry & Progress Bars
 *Target Focus: UX & Observability*
 
-- [ ] Interactive CLI progress indicators (live RPS, active virtual users, latency feed).
-- [ ] Real-time telemetry dashboard / TUI integration.
-- [ ] Improved streaming metrics collection to minimize memory overhead during long runs.
+- [x] Interactive CLI progress indicators (live RPS, active virtual users, latency feed). `[Unreleased / main]`
+- [ ] ~~Real-time telemetry dashboard / TUI integration.~~ *(Postponed: Python scripting is primary runner; CLI is for quick drafts only)*
+- [ ] ~~Improved streaming metrics collection to minimize memory overhead during long runs.~~ *(Deferred until $O(1)$ memory metrics are required for multi-hour runs)*
 
 ---
 
