@@ -1,4 +1,5 @@
 import asyncio
+from dataclasses import dataclass, field
 
 from strobengine._strobengine import (
     LoadProfile,
@@ -9,54 +10,55 @@ from strobengine._strobengine import (
 )
 
 
+@dataclass
+class RequestOptions:
+    """Encapsulates common HTTP and execution parameters with validation."""
+
+    timeout: int = 10
+    chaos: bool = False
+    no_progress: bool = False
+    method: str = "GET"
+    body: str | None = None
+    headers: list[tuple[str, str]] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        if self.timeout <= 0:
+            raise ValueError("timeout must be greater than 0")
+
+
 class StrobEngine:
     def __init__(
         self,
         url: str,
         concurrency: int = 10,
         duration: int = 10,
-        timeout: int = 10,
+        options: RequestOptions | None = None,
         profile: LoadProfile | None = None,
-        chaos: bool = False,
-        no_progress: bool = False,
-        method: str = "GET",
-        body: str | None = None,
-        headers: list[tuple[str, str]] | None = None,
     ) -> None:
         self._url = url
-        self._timeout = timeout
-        self._chaos = chaos
-        self._no_progress = no_progress
-        self._method = method
-        self._body = body
-        self._headers = headers
+        self._options = options
+        self._profile = profile
 
         if profile is None:
             if concurrency <= 0:
                 raise ValueError("Concurrency must be greater than 0")
             if duration <= 0:
                 raise ValueError("Duration must be greater than 0")
-            if timeout <= 0:
-                raise ValueError("Timeout must be greater than 0")
 
             self.config = TestConfig(
                 url=url,
                 concurrency=concurrency,
                 duration_secs=duration,
-                timeout_secs=timeout,
-                chaos=chaos,
-                no_progress=no_progress,
-                method=method,
-                body=body,
-                headers=headers,
+                timeout_secs=self._options.timeout,
+                chaos=self._options.chaos,
+                no_progress=self._options.no_progress,
+                method=self._options.method,
+                body=self._options.body,
+                headers=self._options.headers,
             )
             self._profile = None
         else:
-            if timeout <= 0:
-                raise ValueError("Timeout must be greater than 0")
-
             self.config = None
-            self._profile = profile
 
     @classmethod
     def load_test(
@@ -64,23 +66,13 @@ class StrobEngine:
         url: str,
         concurrency: int = 10,
         duration: int = 10,
-        timeout: int = 10,
-        chaos: bool = False,
-        no_progress: bool = False,
-        method: str = "GET",
-        body: str | None = None,
-        headers: list[tuple[str, str]] | None = None,
+        options: RequestOptions | None = None,
     ) -> "StrobEngine":
         return cls(
             url=url,
             concurrency=concurrency,
             duration=duration,
-            timeout=timeout,
-            chaos=chaos,
-            no_progress=no_progress,
-            method=method,
-            body=body,
-            headers=headers,
+            options=options,
         )
 
     @classmethod
@@ -91,12 +83,7 @@ class StrobEngine:
         max_concurrency: int = 200,
         ramp_duration: int = 60,
         hold_duration: int = 30,
-        timeout: int = 10,
-        chaos: bool = False,
-        no_progress: bool = False,
-        method: str = "GET",
-        body: str | None = None,
-        headers: list[tuple[str, str]] | None = None,
+        options: RequestOptions | None = None,
     ) -> "StrobEngine":
         if start_concurrency <= 0:
             raise ValueError("start_concurrency must be greater than 0")
@@ -117,13 +104,8 @@ class StrobEngine:
         )
         return cls(
             url=url,
-            timeout=timeout,
             profile=profile,
-            chaos=chaos,
-            no_progress=no_progress,
-            method=method,
-            body=body,
-            headers=headers,
+            options=options,
         )
 
     @classmethod
@@ -135,12 +117,7 @@ class StrobEngine:
         pre_spike_duration: int = 5,
         spike_duration: int = 10,
         post_spike_duration: int = 5,
-        timeout: int = 10,
-        chaos: bool = False,
-        no_progress: bool = False,
-        method: str = "GET",
-        body: str | None = None,
-        headers: list[tuple[str, str]] | None = None,
+        options: RequestOptions | None = None,
     ) -> "StrobEngine":
         if baseline <= 0:
             raise ValueError("baseline must be greater than 0")
@@ -162,26 +139,22 @@ class StrobEngine:
         )
         return cls(
             url=url,
-            timeout=timeout,
             profile=profile,
-            chaos=chaos,
-            no_progress=no_progress,
-            method=method,
-            body=body,
-            headers=headers,
+            options=options,
         )
 
     def run(self) -> TestSummary:
+        opts = self._options
         if self._profile is not None:
             return run_load_profiles(
                 self._url,
                 self._timeout,
                 self._profile,
-                self._chaos,
-                no_progress=self._no_progress,
-                method=self._method,
-                body=self._body,
-                headers=self._headers,
+                opts._chaos,
+                no_progress=opts._no_progress,
+                method=opts._method,
+                body=opts._body,
+                headers=opts._headers,
             )
         return run_load_test(self.config)
 
