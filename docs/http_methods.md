@@ -36,7 +36,7 @@ engine = StrobEngine(
     url="http://localhost:8080/post",
     method="POST",
     body='{"name": "test", "value": 42}',
-    headers={"Authorization": "Bearer token123"},
+    headers=[("Authorization", "Bearer token123")],
 )
 summary = engine.run()
 ```
