@@ -6,7 +6,7 @@ from strobengine._strobengine import (
     run_load_profiles,
     run_load_test,
 )
-from strobengine.engine import StrobEngine, RequestOptions
+from strobengine.engine import RequestOptions, StrobEngine
 
 __all__ = [
     "LoadProfile",
