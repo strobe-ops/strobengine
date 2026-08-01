@@ -36,7 +36,7 @@ class StrobEngine:
         profile: LoadProfile | None = None,
     ) -> None:
         self._url = url
-        self._options = options
+        self._options = options if options is not None else RequestOptions()
         self._profile = profile
 
         if profile is None:
@@ -148,13 +148,13 @@ class StrobEngine:
         if self._profile is not None:
             return run_load_profiles(
                 self._url,
-                self._timeout,
+                opts.timeout,
                 self._profile,
-                opts._chaos,
-                no_progress=opts._no_progress,
-                method=opts._method,
-                body=opts._body,
-                headers=opts._headers,
+                opts.chaos,
+                no_progress=opts.no_progress,
+                method=opts.method,
+                body=opts.body,
+                headers=opts.headers,
             )
         return run_load_test(self.config)
 
