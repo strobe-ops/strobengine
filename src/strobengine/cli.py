@@ -7,7 +7,7 @@ from typing import Annotated
 import typer
 
 from strobengine._strobengine import init_logging
-from strobengine.engine import StrobEngine
+from strobengine.engine import RequestOptions, StrobEngine
 from strobengine.reporter import print_summary
 
 VALID_METHODS = {"GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"}
@@ -189,12 +189,14 @@ def load(
         url=url,
         concurrency=concurrency,
         duration=duration,
-        timeout=timeout,
-        chaos=chaos,
-        no_progress=no_progress,
-        method=method,
-        body=body,
-        headers=_parse_headers(header),
+        options=RequestOptions(
+            timeout=timeout,
+            chaos=chaos,
+            no_progress=no_progress,
+            method=method,
+            body=body,
+            headers=_parse_headers(header),
+        ),
     )
     summary = engine.run()
     _output_results(summary, url, duration, json_output)
