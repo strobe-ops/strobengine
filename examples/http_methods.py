@@ -4,7 +4,7 @@ Uses go-httpbin endpoints. Start the test server with:
   podman run -d --rm -p 8080:8080 docker.io/mccutchen/go-httpbin
 """
 
-from strobengine import StrobEngine, RequestOptions
+from strobengine import RequestOptions, StrobEngine
 from strobengine.reporter import print_summary
 
 # GET
