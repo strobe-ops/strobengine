@@ -55,7 +55,11 @@ fn parse_headers(headers: Option<Vec<(String, String)>>) -> PyResult<HeaderMap> 
     Ok(header_map)
 }
 
-fn build_client(concurrency: usize, timeout_secs: u64, header_map: HeaderMap) -> reqwest::Client {
+fn build_client(
+    concurrency: usize,
+    timeout_secs: u64,
+    header_map: HeaderMap,
+) -> Result<reqwest::Client, reqwest::Error> {
     reqwest::Client::builder()
         .pool_max_idle_per_host(concurrency)
         .timeout(Duration::from_secs(timeout_secs))
@@ -65,7 +69,6 @@ fn build_client(concurrency: usize, timeout_secs: u64, header_map: HeaderMap) ->
         .http2_keep_alive_timeout(Duration::from_secs(5))
         .default_headers(header_map)
         .build()
-        .expect("failed to build HTTP client")
 }
 
 #[pyfunction]
@@ -109,9 +112,11 @@ fn run_load_test(py: Python<'_>, config: TestConfig) -> PyResult<metrics::TestSu
             .build()
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
 
-        rt.block_on(async move {
-            let client = build_client(concurrency, timeout_secs, header_map);
+        // Build the client OUTSIDE the async closure
+        let client = build_client(concurrency, timeout_secs, header_map)
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
 
+        rt.block_on(async move {
             tracing::debug!("http client created");
 
             let counters = Arc::new(LiveCounters::new());
@@ -261,9 +266,10 @@ fn run_load_profiles(
             .build()
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
 
-        rt.block_on(async move {
-            let client = build_client(max_concurrency, timeout_secs, header_map);
+        let client = build_client(max_concurrency, timeout_secs, header_map)
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
 
+        rt.block_on(async move {
             tracing::debug!("http client created");
 
             let counters = Arc::new(LiveCounters::new());
