@@ -118,6 +118,24 @@ fn run_load_test(py: Python<'_>, config: TestConfig) -> PyResult<metrics::TestSu
             let duration = Duration::from_secs(duration_secs);
             let test_start = Instant::now();
 
+            // Top-level cancellation token for SIGINT handling
+            let cancel_token = CancellationToken::new();
+
+            // Spawn SIGINT listener with double Ctrl+C safety hatch
+            let token_clone = cancel_token.clone();
+            tokio::spawn(async move {
+                if tokio::signal::ctrl_c().await.is_ok() {
+                    tracing::info!("received SIGINT, initiating graceful shutdown");
+                    token_clone.cancel();
+
+                    // Second Ctrl+C forces immediate termination
+                    if tokio::signal::ctrl_c().await.is_ok() {
+                        tracing::warn!("received second SIGINT, terminating immediately");
+                        std::process::exit(130);
+                    }
+                }
+            });
+
             let (tx, rx) = tokio::sync::mpsc::channel::<RequestMetric>(8192);
 
             let aggregator = tokio::spawn(async move {
@@ -142,33 +160,30 @@ fn run_load_test(py: Python<'_>, config: TestConfig) -> PyResult<metrics::TestSu
                     Arc::clone(&counters),
                     test_start,
                     duration,
+                    cancel_token.clone(),
                 ))
             });
 
             let mut handles = Vec::with_capacity(concurrency);
             for _ in 0..concurrency {
-                let token = CancellationToken::new();
-                handles.push((
-                    tokio::spawn(worker::worker_loop(
-                        client.clone(),
-                        url.clone(),
-                        method.clone(),
-                        body.clone(),
-                        Arc::clone(&counters),
-                        tx.clone(),
-                        duration,
-                        token.clone(),
-                        chaos,
-                    )),
-                    token,
-                ));
+                handles.push(tokio::spawn(worker::worker_loop(
+                    client.clone(),
+                    url.clone(),
+                    method.clone(),
+                    body.clone(),
+                    Arc::clone(&counters),
+                    tx.clone(),
+                    duration,
+                    cancel_token.clone(),
+                    chaos,
+                )));
             }
 
             tracing::debug!(workers = concurrency, "worker tasks spawned");
 
             drop(tx);
 
-            for (handle, _token) in handles {
+            for handle in handles {
                 let _ = handle.await;
             }
 
@@ -255,6 +270,23 @@ fn run_load_profiles(
             let total_duration = Duration::from_secs(total_duration_secs);
             let test_start = Instant::now();
 
+            // Top-level cancellation token for SIGINT handling
+            let cancel_token = CancellationToken::new();
+
+            // Spawn SIGINT listener with double Ctrl+C safety hatch
+            let token_clone = cancel_token.clone();
+            tokio::spawn(async move {
+                if tokio::signal::ctrl_c().await.is_ok() {
+                    tracing::info!("received SIGINT, initiating graceful shutdown");
+                    token_clone.cancel();
+
+                    if tokio::signal::ctrl_c().await.is_ok() {
+                        tracing::warn!("received second SIGINT, terminating immediately");
+                        std::process::exit(130);
+                    }
+                }
+            });
+
             let (tx, rx) = tokio::sync::mpsc::channel::<RequestMetric>(8192);
 
             let aggregator = tokio::spawn(async move {
@@ -279,22 +311,24 @@ fn run_load_profiles(
                     Arc::clone(&counters),
                     test_start,
                     total_duration,
+                    cancel_token.clone(),
                 ))
             });
 
             let counters_clone = Arc::clone(&counters);
             let client_clone = client.clone();
             let url_clone = url.clone();
+            let cancel_clone = cancel_token.clone();
 
             let supervisor = tokio::spawn(async move {
-                let mut tokens: Vec<CancellationToken> = Vec::new();
+                let mut child_tokens: Vec<CancellationToken> = Vec::new();
                 let mut handles: Vec<tokio::task::JoinHandle<()>> = Vec::new();
                 let mut current_concurrency = 0usize;
                 let start = Instant::now();
 
                 loop {
                     let elapsed = start.elapsed();
-                    if elapsed >= total_duration {
+                    if elapsed >= total_duration || cancel_clone.is_cancelled() {
                         break;
                     }
 
@@ -314,13 +348,13 @@ fn run_load_profiles(
                             child_token.clone(),
                             chaos_engine,
                         ));
-                        tokens.push(child_token);
+                        child_tokens.push(child_token);
                         handles.push(handle);
                         current_concurrency += 1;
                     }
 
                     while current_concurrency > target {
-                        if let Some(token) = tokens.pop() {
+                        if let Some(token) = child_tokens.pop() {
                             token.cancel();
                             if let Some(handle) = handles.pop() {
                                 let _ = handle.await;
@@ -334,7 +368,7 @@ fn run_load_profiles(
                     tokio::time::sleep(Duration::from_millis(200)).await;
                 }
 
-                for token in tokens {
+                for token in child_tokens {
                     token.cancel();
                 }
                 for handle in handles {

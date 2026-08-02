@@ -24,15 +24,10 @@ impl Drop for WorkerGuard {
 }
 
 pub async fn prewarm(client: &reqwest::Client, url: &str, method: &Method, body: &Option<Bytes>) {
-    // Build request with actual target method
     let mut prewarm_req = client.request(method.clone(), url);
-
-    // Attach body if present so servers requiring payload validation don't close connection early
     if let Some(b) = body {
         prewarm_req = prewarm_req.body(b.clone());
     }
-
-    // Best-effort send: ignore network/HTTP errors during pre-warming
     let _ = prewarm_req.send().await;
 }
 
@@ -77,7 +72,7 @@ pub async fn worker_loop(
         let base_request = || {
             let mut req = client.request(method.clone(), target_url.clone());
             if let Some(ref b) = body {
-                req = req.body(b.clone()); // Bytes clone = ref-count increment
+                req = req.body(b.clone());
             }
             req
         };
@@ -85,12 +80,18 @@ pub async fn worker_loop(
         let request = match chaos.select_fault() {
             Some(ChaosFault::LatencySpike { duration_ms }) => {
                 tracing::trace!(duration_ms, "chaos: latency spike injected");
-                tokio::time::sleep(Duration::from_millis(duration_ms)).await;
+                // Chaos sleep is also cancellable
+                tokio::select! {
+                    _ = token.cancelled() => {
+                        tracing::debug!("worker cancelled during chaos latency spike");
+                        break;
+                    }
+                    _ = tokio::time::sleep(Duration::from_millis(duration_ms)) => {}
+                }
                 base_request()
             }
             Some(ChaosFault::CorruptedPayload) => {
                 tracing::trace!("chaos: corrupted payload injected");
-                // Override: always POST with corrupted body
                 client
                     .post(&url)
                     .header(CHAOS_HEADER, "corrupted-payload")
@@ -107,22 +108,30 @@ pub async fn worker_loop(
             None => base_request(),
         };
 
-        let (status_code, is_error) = match request.send().await {
-            Ok(res) => {
-                let code = res.status().as_u16();
-                let errored = !res.status().is_success();
-                // Drain response body to ensure clean connection return to pool
-                let _ = res.bytes().await;
-                if errored {
-                    counters.errors.fetch_add(1, Ordering::Relaxed);
-                    tracing::debug!(status_code = code, "non-success HTTP status");
-                }
-                (code, errored)
+        // Race request against cancellation — abandon stuck requests instantly
+        let (status_code, is_error) = tokio::select! {
+            _ = token.cancelled() => {
+                tracing::debug!("worker cancelled, abandoning in-flight request");
+                break;
             }
-            Err(_) => {
-                counters.errors.fetch_add(1, Ordering::Relaxed);
-                tracing::debug!("request failed");
-                (0, true)
+            res = request.send() => {
+                match res {
+                    Ok(res) => {
+                        let code = res.status().as_u16();
+                        let errored = !res.status().is_success();
+                        let _ = res.bytes().await;
+                        if errored {
+                            counters.errors.fetch_add(1, Ordering::Relaxed);
+                            tracing::debug!(status_code = code, "non-success HTTP status");
+                        }
+                        (code, errored)
+                    }
+                    Err(_) => {
+                        counters.errors.fetch_add(1, Ordering::Relaxed);
+                        tracing::debug!("request failed");
+                        (0, true)
+                    }
+                }
             }
         };
 
@@ -136,7 +145,6 @@ pub async fn worker_loop(
             );
         }
 
-        // Update live counters for progress rendering
         counters.completed_requests.fetch_add(1, Ordering::Relaxed);
         counters
             .latency_sum_micros
