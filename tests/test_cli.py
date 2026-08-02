@@ -130,7 +130,8 @@ class TestCLIValidation:
 class TestCLIJsonOutput:
     def test_json_load(self, local_server: str) -> None:
         result = runner.invoke(
-            app, ["load", local_server, "-c", "2", "-d", "1", "--json"]
+            app,
+            ["load", local_server, "-c", "2", "-d", "1", "--json", "--no-progress"],
         )
         assert result.exit_code == 0
         data = json.loads(result.output)
@@ -153,6 +154,7 @@ class TestCLIJsonOutput:
                 "--hold",
                 "1",
                 "--json",
+                "--no-progress",
             ],
         )
         assert result.exit_code == 0
@@ -172,6 +174,7 @@ class TestCLIJsonOutput:
                 "--spike-duration",
                 "1",
                 "--json",
+                "--no-progress",
             ],
         )
         assert result.exit_code == 0

@@ -2,7 +2,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from strobengine.engine import StrobEngine
+from strobengine.engine import RequestOptions, StrobEngine
 
 
 def _make_summary(**kwargs):
@@ -27,7 +27,10 @@ class TestStrobEngineInit:
 
     def test_custom_values(self):
         engine = StrobEngine(
-            url="http://test.io", concurrency=50, duration=30, timeout=5
+            url="http://test.io",
+            concurrency=50,
+            duration=30,
+            options=RequestOptions(timeout=5),
         )
         assert engine.config.url == "http://test.io"
         assert engine.config.concurrency == 50
@@ -47,8 +50,8 @@ class TestStrobEngineInit:
             StrobEngine(url="http://example.com", duration=0)
 
     def test_invalid_timeout(self):
-        with pytest.raises(ValueError, match="Timeout must be greater than 0"):
-            StrobEngine(url="http://example.com", timeout=0)
+        with pytest.raises(ValueError, match="timeout must be greater than 0"):
+            StrobEngine(url="http://example.com", options=RequestOptions(timeout=0))
 
 
 class TestStrobEngineRun:
@@ -98,7 +101,10 @@ class TestLoadTestFactory:
 
     def test_load_test_custom(self):
         engine = StrobEngine.load_test(
-            url="http://test.io", concurrency=50, duration=30, timeout=5
+            url="http://test.io",
+            concurrency=50,
+            duration=30,
+            options=RequestOptions(timeout=5),
         )
         assert engine.config.concurrency == 50
         assert engine.config.duration_secs == 30
