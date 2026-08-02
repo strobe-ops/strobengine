@@ -116,7 +116,11 @@ fn run_load_test(py: Python<'_>, config: TestConfig) -> PyResult<metrics::TestSu
         let client = build_client(concurrency, timeout_secs, header_map)
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
 
-        rt.block_on(async move {
+        // Track whether cancellation was triggered by user SIGINT
+        let interrupted = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let interrupted_check = Arc::clone(&interrupted);
+
+        let result = rt.block_on(async move {
             tracing::debug!("http client created");
 
             let counters = Arc::new(LiveCounters::new());
@@ -128,15 +132,15 @@ fn run_load_test(py: Python<'_>, config: TestConfig) -> PyResult<metrics::TestSu
 
             // Spawn SIGINT listener with double Ctrl+C safety hatch
             let token_clone = cancel_token.clone();
+            let interrupted_clone = interrupted.clone();
             tokio::spawn(async move {
                 if tokio::signal::ctrl_c().await.is_ok() {
                     tracing::info!("received SIGINT, initiating graceful shutdown");
+                    interrupted_clone.store(true, Ordering::SeqCst);
                     token_clone.cancel();
 
-                    // Second Ctrl+C forces immediate termination
                     if tokio::signal::ctrl_c().await.is_ok() {
-                        tracing::warn!("received second SIGINT, terminating immediately");
-                        std::process::exit(130);
+                        tracing::warn!("received second SIGINT, shutdown already in progress");
                     }
                 }
             });
@@ -206,8 +210,19 @@ fn run_load_test(py: Python<'_>, config: TestConfig) -> PyResult<metrics::TestSu
 
             tracing::info!(total, errors, "constant load test completed");
 
-            Ok(metrics::calculate_summary(total, errors, latencies))
-        })
+            Ok::<metrics::TestSummary, pyo3::PyErr>(metrics::calculate_summary(
+                total, errors, latencies,
+            ))
+        })?;
+
+        // If SIGINT was received, raise KeyboardInterrupt to Python
+        if interrupted_check.load(Ordering::SeqCst) {
+            return Err(pyo3::exceptions::PyKeyboardInterrupt::new_err(
+                "load test interrupted by user",
+            ));
+        }
+
+        Ok(result)
     })
 }
 
@@ -269,7 +284,11 @@ fn run_load_profiles(
         let client = build_client(max_concurrency, timeout_secs, header_map)
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
 
-        rt.block_on(async move {
+        // Track whether cancellation was triggered by user SIGINT
+        let interrupted = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let interrupted_check = Arc::clone(&interrupted);
+
+        let result = rt.block_on(async move {
             tracing::debug!("http client created");
 
             let counters = Arc::new(LiveCounters::new());
@@ -281,14 +300,15 @@ fn run_load_profiles(
 
             // Spawn SIGINT listener with double Ctrl+C safety hatch
             let token_clone = cancel_token.clone();
+            let interrupted_clone = interrupted.clone();
             tokio::spawn(async move {
                 if tokio::signal::ctrl_c().await.is_ok() {
                     tracing::info!("received SIGINT, initiating graceful shutdown");
+                    interrupted_clone.store(true, Ordering::SeqCst);
                     token_clone.cancel();
 
                     if tokio::signal::ctrl_c().await.is_ok() {
-                        tracing::warn!("received second SIGINT, terminating immediately");
-                        std::process::exit(130);
+                        tracing::warn!("received second SIGINT, shutdown already in progress");
                     }
                 }
             });
@@ -402,8 +422,19 @@ fn run_load_profiles(
 
             tracing::info!(total, errors, "profile load test completed");
 
-            Ok(metrics::calculate_summary(total, errors, latencies))
-        })
+            Ok::<metrics::TestSummary, pyo3::PyErr>(metrics::calculate_summary(
+                total, errors, latencies,
+            ))
+        })?;
+
+        // If SIGINT was received, raise KeyboardInterrupt to Python
+        if interrupted_check.load(Ordering::SeqCst) {
+            return Err(pyo3::exceptions::PyKeyboardInterrupt::new_err(
+                "load test interrupted by user",
+            ));
+        }
+
+        Ok(result)
     })
 }
 
