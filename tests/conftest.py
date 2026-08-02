@@ -1,3 +1,4 @@
+import contextlib
 import http.server
 import socketserver
 import threading
@@ -14,7 +15,8 @@ class QuietHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.end_headers()
-        self.wfile.write(b'{"status": "ok"}')
+        with contextlib.suppress(BrokenPipeError, ConnectionResetError):
+            self.wfile.write(b'{"status": "ok"}')
 
 
 @pytest.fixture(scope="session")
