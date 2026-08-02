@@ -1,6 +1,6 @@
 [package]
 name = "strobengine"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 
 [lib]
@@ -24,4 +24,3 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "regist
 mimalloc = "0.1.52"
 fastrand = "2.5"
 indicatif = "0.18.6"
-# pyo3-async-runtimes = { version = "0.29.0", features = ["tokio-runtime"] }
