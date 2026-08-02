@@ -268,12 +268,14 @@ def stress(
         max_concurrency=target,
         ramp_duration=ramp,
         hold_duration=hold,
-        timeout=timeout,
-        chaos=chaos,
-        no_progress=no_progress,
-        method=method,
-        body=body,
-        headers=_parse_headers(header),
+        options=RequestOptions(
+            timeout=timeout,
+            chaos=chaos,
+            no_progress=no_progress,
+            method=method,
+            body=body,
+            headers=_parse_headers(header),
+        ),
     )
     summary = engine.run()
     _output_results(summary, url, ramp + hold, json_output)
@@ -350,12 +352,14 @@ def spike(
         pre_spike_duration=pre_spike,
         spike_duration=spike_duration,
         post_spike_duration=post_spike,
-        timeout=timeout,
-        chaos=chaos,
-        no_progress=no_progress,
-        method=method,
-        body=body,
-        headers=_parse_headers(header),
+        options=RequestOptions(
+            timeout=timeout,
+            chaos=chaos,
+            no_progress=no_progress,
+            method=method,
+            body=body,
+            headers=_parse_headers(header),
+        ),
     )
     summary = engine.run()
     _output_results(summary, url, pre_spike + spike_duration + post_spike, json_output)
@@ -391,6 +395,9 @@ def main(argv: list[str] | None = None) -> None:
         app(args=argv)
     except SystemExit as e:
         raise e
+    except KeyboardInterrupt:
+        typer.echo("\nInterrupted.", err=True)
+        raise SystemExit(130) from None
 
 
 if __name__ == "__main__":
