@@ -6,11 +6,24 @@ on:
 
 jobs:
   build-wheels:
-    name: Build wheels on ${{ matrix.os }}
+    name: Build wheels on ${{ matrix.os }} (${{ matrix.target || 'native' }})
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        include:
+          # Linux
+          - os: ubuntu-latest
+            target: x86_64
+          # Windows
+          - os: windows-latest
+            target: x64
+          # macOS Apple Silicon (ARM64)
+          - os: macos-latest
+            target: aarch64
+          # macOS Intel (x86_64) cross-compiled on macos-latest
+          - os: macos-latest
+            target: x86_64
     steps:
       - uses: actions/checkout@v7
 
@@ -22,6 +35,7 @@ jobs:
       - name: Build wheels via Maturin
         uses: PyO3/maturin-action@v1
         with:
+          target: ${{ matrix.target }}
           args: --release --out dist --find-interpreter
           sccache: 'true'
           sdist: false
@@ -29,7 +43,7 @@ jobs:
       - name: Upload wheel artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: wheels-${{ matrix.os }}
+          name: wheels-${{ matrix.os }}-${{ matrix.target }}
           path: dist/*.whl
 
   build-sdist:
@@ -71,3 +85,4 @@ jobs:
         with:
           repository-url: https://test.pypi.org/legacy/
           packages-dir: dist/
+          skip-existing: true  # Skips 400 errors for already uploaded files
