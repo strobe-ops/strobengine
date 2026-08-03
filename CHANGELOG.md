@@ -4,6 +4,31 @@ All notable changes to `strobengine` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2026-08-03
+
+### Bug Fixes
+
+- *(types)* Correct headers type in _strobengine.pyi from dict to list of tuples (#41)
+- Replace build_client panic with proper error propagation (#42)
+- Replace std::process::exit with safe PyKeyboardInterrupt on SIGINT (#43)
+- *(progress)* Guard against zero total_duration in progress bar calculation (#44)
+- Improve worker shutdown and panic handling (#45)
+- *(metrics)* Normalize counter types to AtomicU64 for 32-bit safety (#46)
+- *(cli)* Add type annotation to _output_results summary parameter (#48)
+
+### Documentation
+
+- Add comment explaining SystemExit re-raise pattern (#50)
+
+### Miscellaneous Tasks
+
+- Remove unnecessary clippy allow on run_load_test (#47)
+- Add multi-architecture matrix for macOS wheel builds (#52)
+
+### Refactoring
+
+- Extract magic number 8192 to named constant METRIC_CHANNEL_BUFFER (#49)
+- Extract magic numbers to named constants across Rust and Python (#51)
 ## [0.2.0] - 2026-08-02
 
 ### Bug Fixes
@@ -20,6 +45,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Update roadmap to reflect changes (#34)
 - Add HTTP method, body, and header documentation
 - Add code examples (#37)
+- *(changelog)* Update CHANGELOG.md for v0.2.0 release
 
 ### Features
 
@@ -43,6 +69,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - *(release)* Prepare v0.1.0 changelog and tag
 - Add PyPI publish workflow with tag-based triggering (#26)
+- *(pyproject)* Add license metadata and project URLs, bump version
+- *(release)* Merge v0.2.0 release prep into main (#40)
 
 ### Performance
 
