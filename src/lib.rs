@@ -193,12 +193,17 @@ fn run_load_test(py: Python<'_>, config: TestConfig) -> PyResult<metrics::TestSu
             drop(tx);
 
             for handle in handles {
-                let _ = handle.await;
+                if let Err(e) = handle.await {
+                    tracing::warn!(error = %e, "worker task panicked");
+                }
             }
 
             // Wait for render task to finish naturally
+            #[allow(clippy::collapsible_if)]
             if let Some(handle) = render_handle {
-                let _ = handle.await;
+                if let Err(e) = handle.await {
+                    tracing::debug!(error = %e, "render task panicked");
+                }
             }
 
             let latencies = aggregator
@@ -349,6 +354,7 @@ fn run_load_profiles(
             let supervisor = tokio::spawn(async move {
                 let mut child_tokens: Vec<CancellationToken> = Vec::new();
                 let mut handles: Vec<tokio::task::JoinHandle<()>> = Vec::new();
+                let mut reaped_handles: Vec<tokio::task::JoinHandle<()>> = Vec::new();
                 let mut current_concurrency = 0usize;
                 let start = Instant::now();
 
@@ -383,9 +389,16 @@ fn run_load_profiles(
                         if let Some(token) = child_tokens.pop() {
                             token.cancel();
                             if let Some(handle) = handles.pop() {
-                                let _ = handle.await;
+                                reaped_handles.push(handle);
                             }
                             current_concurrency -= 1;
+                        }
+                    }
+
+                    // Join reaped workers concurrently
+                    for handle in reaped_handles.drain(..) {
+                        if let Err(e) = handle.await {
+                            tracing::debug!(error = %e, "cancelled worker panicked during shutdown");
                         }
                     }
 
@@ -398,7 +411,9 @@ fn run_load_profiles(
                     token.cancel();
                 }
                 for handle in handles {
-                    let _ = handle.await;
+                    if let Err(e) = handle.await {
+                        tracing::warn!(error = %e, "worker task panicked");
+                    }
                 }
 
                 drop(tx);
@@ -409,8 +424,11 @@ fn run_load_profiles(
                 .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
 
             // Wait for render task to finish naturally
+            #[allow(clippy::collapsible_if)]
             if let Some(handle) = render_handle {
-                let _ = handle.await;
+                if let Err(e) = handle.await {
+                    tracing::debug!(error = %e, "render task panicked");
+                }
             }
 
             let latencies = aggregator
