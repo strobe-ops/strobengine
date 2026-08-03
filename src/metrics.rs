@@ -10,8 +10,8 @@ pub struct RequestMetric {
 }
 
 pub struct LiveCounters {
-    pub total_requests: AtomicUsize,
-    pub errors: AtomicUsize,
+    pub total_requests: AtomicU64,
+    pub errors: AtomicU64,
     pub active_workers: AtomicUsize,
     pub completed_requests: AtomicU64,
     pub latency_sum_micros: AtomicU64,
@@ -21,8 +21,8 @@ pub struct LiveCounters {
 impl LiveCounters {
     pub fn new() -> Self {
         Self {
-            total_requests: AtomicUsize::new(0),
-            errors: AtomicUsize::new(0),
+            total_requests: AtomicU64::new(0),
+            errors: AtomicU64::new(0),
             active_workers: AtomicUsize::new(0),
             completed_requests: AtomicU64::new(0),
             latency_sum_micros: AtomicU64::new(0),
@@ -46,11 +46,15 @@ pub struct TestSummary {
     pub p99_latency_ms: f64,
 }
 
-pub fn calculate_summary(total: usize, errors: usize, mut latencies: Vec<u128>) -> TestSummary {
+pub fn calculate_summary(
+    total_requests: u64,
+    total_errors: u64,
+    mut latencies: Vec<u128>,
+) -> TestSummary {
     if latencies.is_empty() {
         return TestSummary {
-            total_requests: total,
-            total_errors: errors,
+            total_requests: total_requests as usize,
+            total_errors: total_errors as usize,
             average_latency_ms: 0.0,
             p95_latency_ms: 0.0,
             p99_latency_ms: 0.0,
@@ -67,8 +71,8 @@ pub fn calculate_summary(total: usize, errors: usize, mut latencies: Vec<u128>) 
     let p99_idx = (len * 99 / 100).min(len - 1);
 
     TestSummary {
-        total_requests: total,
-        total_errors: errors,
+        total_requests: total_requests as usize,
+        total_errors: total_errors as usize,
         average_latency_ms,
         p95_latency_ms: latencies[p95_idx] as f64 / 1000.0,
         p99_latency_ms: latencies[p99_idx] as f64 / 1000.0,
