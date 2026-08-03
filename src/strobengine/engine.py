@@ -8,13 +8,27 @@ from strobengine._strobengine import (
     run_load_profiles,
     run_load_test,
 )
+from strobengine.constants import (
+    DEFAULT_BASELINE,
+    DEFAULT_CONCURRENCY,
+    DEFAULT_DURATION_SECS,
+    DEFAULT_HOLD_SECS,
+    DEFAULT_MAX_CONCURRENCY,
+    DEFAULT_PEAK_CONCURRENCY,
+    DEFAULT_POST_SPIKE_SECS,
+    DEFAULT_PRE_SPIKE_SECS,
+    DEFAULT_RAMP_SECS,
+    DEFAULT_SPIKE_SECS,
+    DEFAULT_START_CONCURRENCY,
+    DEFAULT_TIMEOUT_SECS,
+)
 
 
 @dataclass
 class RequestOptions:
     """Encapsulates common HTTP and execution parameters with validation."""
 
-    timeout: int = 10
+    timeout: int = DEFAULT_TIMEOUT_SECS
     chaos: bool = False
     no_progress: bool = False
     method: str = "GET"
@@ -30,8 +44,8 @@ class StrobEngine:
     def __init__(
         self,
         url: str,
-        concurrency: int = 10,
-        duration: int = 10,
+        concurrency: int = DEFAULT_CONCURRENCY,
+        duration: int = DEFAULT_DURATION_SECS,
         options: RequestOptions | None = None,
         profile: LoadProfile | None = None,
     ) -> None:
@@ -64,8 +78,8 @@ class StrobEngine:
     def load_test(
         cls,
         url: str,
-        concurrency: int = 10,
-        duration: int = 10,
+        concurrency: int = DEFAULT_CONCURRENCY,
+        duration: int = DEFAULT_DURATION_SECS,
         options: RequestOptions | None = None,
     ) -> "StrobEngine":
         return cls(
@@ -79,10 +93,10 @@ class StrobEngine:
     def stress_test(
         cls,
         url: str,
-        start_concurrency: int = 10,
-        max_concurrency: int = 200,
-        ramp_duration: int = 60,
-        hold_duration: int = 30,
+        start_concurrency: int = DEFAULT_START_CONCURRENCY,
+        max_concurrency: int = DEFAULT_MAX_CONCURRENCY,
+        ramp_duration: int = DEFAULT_RAMP_SECS,
+        hold_duration: int = DEFAULT_HOLD_SECS,
         options: RequestOptions | None = None,
     ) -> "StrobEngine":
         if start_concurrency <= 0:
@@ -112,11 +126,11 @@ class StrobEngine:
     def spike_test(
         cls,
         url: str,
-        baseline: int = 5,
-        peak_concurrency: int = 500,
-        pre_spike_duration: int = 5,
-        spike_duration: int = 10,
-        post_spike_duration: int = 5,
+        baseline: int = DEFAULT_BASELINE,
+        peak_concurrency: int = DEFAULT_PEAK_CONCURRENCY,
+        pre_spike_duration: int = DEFAULT_PRE_SPIKE_SECS,
+        spike_duration: int = DEFAULT_SPIKE_SECS,
+        post_spike_duration: int = DEFAULT_POST_SPIKE_SECS,
         options: RequestOptions | None = None,
     ) -> "StrobEngine":
         if baseline <= 0:
