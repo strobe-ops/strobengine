@@ -6,7 +6,7 @@ from typing import Annotated
 
 import typer
 
-from strobengine._strobengine import init_logging
+from strobengine._strobengine import TestSummary, init_logging
 from strobengine.engine import RequestOptions, StrobEngine
 from strobengine.reporter import print_summary
 
@@ -114,7 +114,9 @@ def _global_options(
     pass
 
 
-def _output_results(summary, url: str, duration_secs: int, json_output: bool) -> None:
+def _output_results(
+    summary: TestSummary, url: str, duration_secs: int, json_output: bool
+) -> None:
     if json_output:
         print(
             json.dumps(
