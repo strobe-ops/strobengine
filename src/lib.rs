@@ -24,6 +24,12 @@ use crate::chaos::ChaosEngine;
 use crate::config::{LoadProfile, TestConfig};
 use crate::metrics::{LiveCounters, RequestMetric};
 
+/// Buffer capacity for the async MPSC channel streaming metrics from workers to the aggregator.
+///
+/// 8,192 (~8k) provides enough head room to prevent worker task backpressure during high RPS bursts
+/// without allocating unnecessary heap memory (8,192 * std::mem::size_of::<RequestMetric>()).
+const METRIC_CHANNEL_BUFFER: usize = 8192;
+
 fn parse_method(method_str: &str) -> PyResult<Method> {
     method_str.to_uppercase().parse().map_err(|_| {
         pyo3::exceptions::PyValueError::new_err(format!("Invalid HTTP method: {method_str}"))
@@ -144,7 +150,7 @@ fn run_load_test(py: Python<'_>, config: TestConfig) -> PyResult<metrics::TestSu
                 }
             });
 
-            let (tx, rx) = tokio::sync::mpsc::channel::<RequestMetric>(8192);
+            let (tx, rx) = tokio::sync::mpsc::channel::<RequestMetric>(METRIC_CHANNEL_BUFFER);
 
             let aggregator = tokio::spawn(async move {
                 let mut latencies = Vec::new();
@@ -317,7 +323,7 @@ fn run_load_profiles(
                 }
             });
 
-            let (tx, rx) = tokio::sync::mpsc::channel::<RequestMetric>(8192);
+            let (tx, rx) = tokio::sync::mpsc::channel::<RequestMetric>(METRIC_CHANNEL_BUFFER);
 
             let aggregator = tokio::spawn(async move {
                 let mut latencies = Vec::new();
