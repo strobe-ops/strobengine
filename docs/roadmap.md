@@ -15,12 +15,12 @@ This document outlines the planned trajectory and upcoming feature epics for **s
 
 ### Epic: Fault Injection & Resilience Testing (Chaos)
 
-- [x] Basic chaos testing support. `[Unreleased / main]`
+- [x] Basic chaos testing support. `[v0.2.0]`
 
 ### Epic: Real-Time Telemetry & Progress Bars
 *Target Focus: UX & Observability*
 
-- [x] Interactive CLI progress indicators (live RPS, active virtual users, latency feed). `[Unreleased / main]`
+- [x] Interactive CLI progress indicators (live RPS, active virtual users, latency feed). `[v0.2.0]`
 - [ ] ~~Real-time telemetry dashboard / TUI integration.~~ *(Postponed: Python scripting is primary runner; CLI is for quick drafts only)*
 - [ ] ~~Improved streaming metrics collection to minimize memory overhead during long runs.~~ *(Deferred until $O(1)$ memory metrics are required for multi-hour runs)*
 
@@ -31,7 +31,7 @@ This document outlines the planned trajectory and upcoming feature epics for **s
 
 - [ ] Custom HTTP Headers support (authentication, user-agents, metadata).
 - [ ] Dynamic & static Request Payloads (`POST`/`PUT`/`PATCH` body support with JSON/Form Data).
-- [ ] Support for all standard HTTP methods (`GET`, `POST`, `PUT`, `DELETE`, `PATCH`, `HEAD`, `OPTIONS`).
+- [x] Support for all standard HTTP methods (`GET`, `POST`, `PUT`, `DELETE`, `PATCH`, `HEAD`, `OPTIONS`). `[v0.2.0]`
 
 ---
 
