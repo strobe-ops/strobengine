@@ -85,3 +85,4 @@ jobs:
         with:
           repository-url: https://test.pypi.org/legacy/
           packages-dir: dist/
+          skip-existing: true  # Skips 400 errors for already uploaded files
