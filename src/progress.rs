@@ -48,7 +48,11 @@ pub async fn render_loop(
                 }
 
                 // Progress percentage based on elapsed time
-                let pct = (elapsed.as_secs_f64() / total_duration.as_secs_f64() * 100.0) as u64;
+                let pct = if total_duration.is_zero() {
+                    0
+                } else {
+                    (elapsed.as_secs_f64() / total_duration.as_secs_f64() * 100.0) as u64
+                };
                 pb.set_position(pct.min(99));
 
                 // Sample metrics
