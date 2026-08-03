@@ -77,7 +77,6 @@ fn init_logging(level: String, log_file: Option<String>) {
 }
 
 #[pyfunction]
-#[allow(clippy::too_many_arguments)]
 fn run_load_test(py: Python<'_>, config: TestConfig) -> PyResult<metrics::TestSummary> {
     py.detach(move || {
         let url = config.url;
