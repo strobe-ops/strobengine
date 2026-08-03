@@ -5,10 +5,16 @@ use std::time::{Duration, Instant};
 use indicatif::{ProgressBar, ProgressStyle};
 use tokio_util::sync::CancellationToken;
 
-use crate::metrics::LiveCounters;
+use crate::metrics::{LiveCounters, MICROS_PER_MILLI};
+
+/// Target update rate for the terminal UI tick loop.
+const RENDER_LOOP_SLEEP_MS: u64 = 200;
+
+/// Indicatif progress bar total resolution ticks.
+const PROGRESS_BAR_MAX_TICKS: u64 = 100;
 
 pub fn create_progress_bar(_total_duration: Duration) -> ProgressBar {
-    let pb = ProgressBar::new(100);
+    let pb = ProgressBar::new(PROGRESS_BAR_MAX_TICKS);
     pb.set_style(
         ProgressStyle::with_template(
             "{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/dim}] {pos}% | {msg}",
@@ -33,7 +39,7 @@ pub async fn render_loop(
 
     loop {
         tokio::select! {
-            _ = tokio::time::sleep(Duration::from_millis(200)) => {
+            _ = tokio::time::sleep(Duration::from_millis(RENDER_LOOP_SLEEP_MS)) => {
                 let now = Instant::now();
                 let delta_sec = (now - last_tick).as_secs_f64();
                 last_tick = now;
@@ -70,7 +76,7 @@ pub async fn render_loop(
 
                 // Average latency across all completed requests
                 let avg_latency_ms = if latency_count > 0 {
-                    latency_sum as f64 / latency_count as f64 / 1000.0
+                    latency_sum as f64 / latency_count as f64 / MICROS_PER_MILLI
                 } else {
                     0.0
                 };

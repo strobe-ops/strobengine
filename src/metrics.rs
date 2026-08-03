@@ -2,6 +2,9 @@ use std::sync::atomic::{AtomicU64, AtomicUsize};
 
 use pyo3::prelude::*;
 
+/// Conversion factor from microseconds to milliseconds (1 ms = 1,000 us).
+pub const MICROS_PER_MILLI: f64 = 1_000.0;
+
 #[allow(dead_code)]
 pub struct RequestMetric {
     pub status_code: u16,
@@ -65,7 +68,7 @@ pub fn calculate_summary(
 
     let len = latencies.len();
     let sum: u128 = latencies.iter().sum();
-    let average_latency_ms = sum as f64 / len as f64 / 1000.0;
+    let average_latency_ms = sum as f64 / len as f64 / MICROS_PER_MILLI;
 
     let p95_idx = (len * 95 / 100).min(len - 1);
     let p99_idx = (len * 99 / 100).min(len - 1);
@@ -74,8 +77,8 @@ pub fn calculate_summary(
         total_requests: total_requests as usize,
         total_errors: total_errors as usize,
         average_latency_ms,
-        p95_latency_ms: latencies[p95_idx] as f64 / 1000.0,
-        p99_latency_ms: latencies[p99_idx] as f64 / 1000.0,
+        p95_latency_ms: latencies[p95_idx] as f64 / MICROS_PER_MILLI,
+        p99_latency_ms: latencies[p99_idx] as f64 / MICROS_PER_MILLI,
     }
 }
 

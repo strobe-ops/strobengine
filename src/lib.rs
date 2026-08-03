@@ -30,6 +30,14 @@ use crate::metrics::{LiveCounters, RequestMetric};
 /// without allocating unnecessary heap memory (8,192 * std::mem::size_of::<RequestMetric>()).
 const METRIC_CHANNEL_BUFFER: usize = 8192;
 
+/// Client network configuration defaults.
+const DEFAULT_CONNECT_TIMEOUT_SECS: u64 = 5;
+const DEFAULT_H2_KEEPALIVE_INTERVAL_SECS: u64 = 10;
+const DEFAULT_H2_KEEPALIVE_TIMEOUT_SECS: u64 = 5;
+
+/// Supervisor loop poll rate in milliseconds.
+const SUPERVISOR_TICK_MS: u64 = 200;
+
 fn parse_method(method_str: &str) -> PyResult<Method> {
     method_str.to_uppercase().parse().map_err(|_| {
         pyo3::exceptions::PyValueError::new_err(format!("Invalid HTTP method: {method_str}"))
@@ -69,10 +77,10 @@ fn build_client(
     reqwest::Client::builder()
         .pool_max_idle_per_host(concurrency)
         .timeout(Duration::from_secs(timeout_secs))
-        .connect_timeout(Duration::from_secs(5))
+        .connect_timeout(Duration::from_secs(DEFAULT_CONNECT_TIMEOUT_SECS))
         .tcp_nodelay(true)
-        .http2_keep_alive_interval(Duration::from_secs(10))
-        .http2_keep_alive_timeout(Duration::from_secs(5))
+        .http2_keep_alive_interval(Duration::from_secs(DEFAULT_H2_KEEPALIVE_INTERVAL_SECS))
+        .http2_keep_alive_timeout(Duration::from_secs(DEFAULT_H2_KEEPALIVE_TIMEOUT_SECS))
         .default_headers(header_map)
         .build()
 }
@@ -409,7 +417,7 @@ fn run_load_profiles(
 
                     tracing::debug!(current_concurrency, target, "supervisor tick");
 
-                    tokio::time::sleep(Duration::from_millis(200)).await;
+                    tokio::time::sleep(Duration::from_millis(SUPERVISOR_TICK_MS)).await;
                 }
 
                 for token in child_tokens {
