@@ -396,6 +396,7 @@ def main(argv: list[str] | None = None) -> None:
     try:
         app(args=argv)
     except SystemExit as e:
+        # Re-raise to prevent KeyboardInterrupt handler from catching typer exits
         raise e
     except KeyboardInterrupt:
         typer.echo("\nInterrupted.", err=True)
