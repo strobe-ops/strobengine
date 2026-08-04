@@ -25,7 +25,6 @@ use crate::config::{LoadProfile, TestConfig};
 use crate::metrics::{LiveCounters, RequestMetric};
 
 /// Buffer capacity for the async MPSC channel streaming metrics from workers to the aggregator.
-///
 /// 8,192 (~8k) provides enough head room to prevent worker task backpressure during high RPS bursts
 /// without allocating unnecessary heap memory (8,192 * std::mem::size_of::<RequestMetric>()).
 const METRIC_CHANNEL_BUFFER: usize = 8192;
@@ -37,6 +36,33 @@ const DEFAULT_H2_KEEPALIVE_TIMEOUT_SECS: u64 = 5;
 
 /// Supervisor loop poll rate in milliseconds.
 const SUPERVISOR_TICK_MS: u64 = 200;
+
+/// Represents the concurency model for the test run.
+pub enum ConcurrencyStrategy {
+    Constant {
+        concurrency: usize,
+        duration_secs: u64,
+    },
+    Dynamic {
+        profile: LoadProfile,
+    },
+}
+
+impl ConcurrencyStrategy {
+    pub fn max_concurrency(&self) -> usize {
+        match self {
+            Self::Constant { concurrency, .. } => *concurrency,
+            Self::Dynamic { profile } => profile.max_concurrency(),
+        }
+    }
+
+    pub fn total_duration_secs(&self) -> u64 {
+        match self {
+            Self::Constant { duration_secs, .. } => *duration_secs,
+            Self::Dynamic { profile } => profile.total_duration(),
+        }
+    }
+}
 
 fn parse_method(method_str: &str) -> PyResult<Method> {
     method_str.to_uppercase().parse().map_err(|_| {
@@ -90,103 +116,92 @@ fn init_logging(level: String, log_file: Option<String>) {
     logging::init_tracing(&level, log_file.as_deref());
 }
 
-#[pyfunction]
-fn run_load_test(py: Python<'_>, config: TestConfig) -> PyResult<metrics::TestSummary> {
-    py.detach(move || {
-        let url = config.url;
-        let concurrency = config.concurrency;
-        let duration_secs = config.duration_secs;
-        let timeout_secs = config.timeout_secs;
-        let chaos = ChaosEngine::new(config.chaos, config.chaos_rate);
-        let no_progress = config.no_progress;
+#[allow(clippy::too_many_arguments)]
+async fn execute_test(
+    url: String,
+    timeout_secs: u64,
+    method: Method,
+    body: Option<bytes::Bytes>,
+    header_map: HeaderMap,
+    chaos: ChaosEngine,
+    no_progress: bool,
+    strategy: ConcurrencyStrategy,
+) -> PyResult<metrics::TestSummary> {
+    let client = build_client(strategy.max_concurrency(), timeout_secs, header_map)
+        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
 
-        // Parse and validate HTTP method, body, headers before test starts
-        let method = parse_method(&config.method)?;
-        let body = parse_body(config.body);
-        let mut header_map = parse_headers(config.headers)?;
+    tracing::debug!("http client created");
 
-        // Auto-insert Content-Type when body is present
-        if body.is_some() && !header_map.contains_key(CONTENT_TYPE) {
-            header_map.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+    let counters = Arc::new(LiveCounters::new());
+    let total_duration = Duration::from_secs(strategy.total_duration_secs());
+    let test_start = Instant::now();
+
+    // Track whether cancellation was triggered by user SIGINT
+    let interrupted = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let interrupted_check = Arc::clone(&interrupted);
+
+    // Top-level cancellation token for SIGINT handling
+    let cancel_token = CancellationToken::new();
+
+    // Spawn SIGINT listener with double Ctrl+C safety hatch
+    let token_clone = cancel_token.clone();
+    let interrupted_clone = interrupted.clone();
+    tokio::spawn(async move {
+        if tokio::signal::ctrl_c().await.is_ok() {
+            tracing::info!("received SIGINT, initiating graceful shutdown");
+            interrupted_clone.store(true, Ordering::SeqCst);
+            token_clone.cancel();
+
+            if tokio::signal::ctrl_c().await.is_ok() {
+                tracing::warn!("received second SIGINT, shutdown already in progress");
+            }
         }
+    });
 
-        tracing::info!(
-            url,
+    // --- Metrics Aggregator Setup ---
+    let (tx, rx) = tokio::sync::mpsc::channel::<RequestMetric>(METRIC_CHANNEL_BUFFER);
+
+    let aggregator = tokio::spawn(async move {
+        let mut latencies = Vec::new();
+        let mut rx = rx;
+        while let Some(metric) = rx.recv().await {
+            latencies.push(metric.latency_micros);
+        }
+        latencies
+    });
+
+    // Spawn progress render task (only on TTY when enabled)
+    let use_progress = !no_progress && std::io::stderr().is_terminal();
+    let pb = if use_progress {
+        Some(progress::create_progress_bar(total_duration))
+    } else {
+        None
+    };
+    let render_handle = pb.as_ref().map(|pb| {
+        tokio::spawn(progress::render_loop(
+            pb.clone(),
+            Arc::clone(&counters),
+            test_start,
+            total_duration,
+            cancel_token.clone(),
+        ))
+    });
+
+    // --- Dynamic Strategy Dispatch ---
+    match strategy {
+        ConcurrencyStrategy::Constant {
             concurrency,
             duration_secs,
-            timeout_secs,
-            method = %method,
-            chaos = config.chaos,
-            "starting constant load test"
-        );
-
-        let rt = tokio::runtime::Builder::new_multi_thread()
-            .enable_all()
-            .build()
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-
-        // Build the client OUTSIDE the async closure
-        let client = build_client(concurrency, timeout_secs, header_map)
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-
-        // Track whether cancellation was triggered by user SIGINT
-        let interrupted = Arc::new(std::sync::atomic::AtomicBool::new(false));
-        let interrupted_check = Arc::clone(&interrupted);
-
-        let result = rt.block_on(async move {
-            tracing::debug!("http client created");
-
-            let counters = Arc::new(LiveCounters::new());
+        } => {
+            tracing::info!(
+                url,
+                concurrency,
+                duration_secs,
+                "starting constant load test"
+            );
             let duration = Duration::from_secs(duration_secs);
-            let test_start = Instant::now();
-
-            // Top-level cancellation token for SIGINT handling
-            let cancel_token = CancellationToken::new();
-
-            // Spawn SIGINT listener with double Ctrl+C safety hatch
-            let token_clone = cancel_token.clone();
-            let interrupted_clone = interrupted.clone();
-            tokio::spawn(async move {
-                if tokio::signal::ctrl_c().await.is_ok() {
-                    tracing::info!("received SIGINT, initiating graceful shutdown");
-                    interrupted_clone.store(true, Ordering::SeqCst);
-                    token_clone.cancel();
-
-                    if tokio::signal::ctrl_c().await.is_ok() {
-                        tracing::warn!("received second SIGINT, shutdown already in progress");
-                    }
-                }
-            });
-
-            let (tx, rx) = tokio::sync::mpsc::channel::<RequestMetric>(METRIC_CHANNEL_BUFFER);
-
-            let aggregator = tokio::spawn(async move {
-                let mut latencies = Vec::new();
-                let mut rx = rx;
-                while let Some(metric) = rx.recv().await {
-                    latencies.push(metric.latency_micros);
-                }
-                latencies
-            });
-
-            // Spawn progress render task (only on TTY when enabled)
-            let use_progress = !no_progress && std::io::stderr().is_terminal();
-            let pb = if use_progress {
-                Some(progress::create_progress_bar(duration))
-            } else {
-                None
-            };
-            let render_handle = pb.as_ref().map(|pb| {
-                tokio::spawn(progress::render_loop(
-                    pb.clone(),
-                    Arc::clone(&counters),
-                    test_start,
-                    duration,
-                    cancel_token.clone(),
-                ))
-            });
-
             let mut handles = Vec::with_capacity(concurrency);
+
             for _ in 0..concurrency {
                 handles.push(tokio::spawn(worker::worker_loop(
                     client.clone(),
@@ -201,46 +216,169 @@ fn run_load_test(py: Python<'_>, config: TestConfig) -> PyResult<metrics::TestSu
                 )));
             }
 
-            tracing::debug!(workers = concurrency, "worker tasks spawned");
-
+            // NOTE: Drop outer `tx` so only worker clones hold channel senders
             drop(tx);
+
+            tracing::debug!(workers = concurrency, "worker tasks spawned");
 
             for handle in handles {
                 if let Err(e) = handle.await {
                     tracing::warn!(error = %e, "worker task panicked");
                 }
             }
+        }
+        ConcurrencyStrategy::Dynamic { profile } => {
+            let total_duration_secs = profile.total_duration();
+            tracing::info!(url, total_duration_secs, "starting profile load test");
 
-            // Wait for render task to finish naturally
-            #[allow(clippy::collapsible_if)]
-            if let Some(handle) = render_handle {
-                if let Err(e) = handle.await {
-                    tracing::debug!(error = %e, "render task panicked");
+            let counters_clone = Arc::clone(&counters);
+            let client_clone = client.clone();
+            let url_clone = url.clone();
+            let method_clone = method.clone();
+            let body_clone = body.clone();
+            let cancel_clone = cancel_token.clone();
+            let tx_supervisor = tx.clone();
+
+            // NOTE: Drop outer `tx` so supervisor/workers hold remaining channel senders
+            drop(tx);
+
+            let supervisor = tokio::spawn(async move {
+                let mut child_tokens: Vec<CancellationToken> = Vec::new();
+                let mut handles: Vec<tokio::task::JoinHandle<()>> = Vec::new();
+                let mut reaped_handles: Vec<tokio::task::JoinHandle<()>> = Vec::new();
+                let mut current_concurrency = 0usize;
+                let start = Instant::now();
+
+                loop {
+                    let elapsed = start.elapsed();
+                    if elapsed >= total_duration || cancel_clone.is_cancelled() {
+                        break;
+                    }
+
+                    let target = profile.target_concurrency(elapsed);
+
+                    while current_concurrency < target {
+                        let child_token = cancel_clone.child_token();
+                        let remaining = total_duration.saturating_sub(elapsed);
+                        let handle = tokio::spawn(worker::worker_loop(
+                            client_clone.clone(),
+                            url_clone.clone(),
+                            method_clone.clone(),
+                            body_clone.clone(),
+                            Arc::clone(&counters_clone),
+                            tx_supervisor.clone(),
+                            remaining,
+                            child_token.clone(),
+                            chaos,
+                        ));
+                        child_tokens.push(child_token);
+                        handles.push(handle);
+                        current_concurrency += 1;
+                    }
+
+                    while current_concurrency > target {
+                        if let Some(token) = child_tokens.pop() {
+                            token.cancel();
+                            if let Some(handle) = handles.pop() {
+                                reaped_handles.push(handle);
+                            }
+                            current_concurrency -= 1;
+                        }
+                    }
+
+                    // Join reaped workers concurrently during scale down
+                    for handle in reaped_handles.drain(..) {
+                        if let Err(e) = handle.await {
+                            tracing::debug!(error = %e, "cancelled worker panicked during scale down");
+                        }
+                    }
+
+                    tracing::debug!(current_concurrency, target, "supervisor tick");
+                    tokio::time::sleep(Duration::from_millis(SUPERVISOR_TICK_MS)).await;
                 }
-            }
 
-            let latencies = aggregator
+                // Clean up remaining workers when load profile completes or cancels
+                for token in &child_tokens {
+                    token.cancel();
+                }
+                for handle in handles {
+                    if let Err(e) = handle.await {
+                        tracing::warn!(error = %e, "worker task panicked during final teardown");
+                    }
+                }
+            });
+
+            supervisor
                 .await
                 .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        }
+    }
 
-            let total = counters.total_requests.load(Ordering::Relaxed);
-            let errors = counters.errors.load(Ordering::Relaxed);
+    // --- Shared Teardown & Aggregation ---
 
-            tracing::info!(total, errors, "constant load test completed");
+    // Wait for progress rendering task to finish
+    if let Some(handle) = render_handle
+        && let Err(e) = handle.await
+    {
+        tracing::debug!(error = %e, "render task panicked");
+    }
 
-            Ok::<metrics::TestSummary, pyo3::PyErr>(metrics::calculate_summary(
-                total, errors, latencies,
-            ))
-        })?;
+    // Receive latency results (channel closes automatically as all tx references dropped)
+    let latencies = aggregator
+        .await
+        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
 
-        // If SIGINT was received, raise KeyboardInterrupt to Python
-        if interrupted_check.load(Ordering::SeqCst) {
-            return Err(pyo3::exceptions::PyKeyboardInterrupt::new_err(
-                "load test interrupted by user",
-            ));
+    let total = counters.total_requests.load(Ordering::Relaxed);
+    let errors = counters.errors.load(Ordering::Relaxed);
+
+    tracing::info!(total, errors, "load test completed");
+
+    // Raise KeyboardInterrupt to Python if test was canceled by user
+    if interrupted_check.load(Ordering::SeqCst) {
+        return Err(pyo3::exceptions::PyKeyboardInterrupt::new_err(
+            "load test interrupted by user",
+        ));
+    }
+
+    Ok(metrics::calculate_summary(total, errors, latencies))
+}
+
+#[pyfunction]
+fn run_load_test(py: Python<'_>, config: TestConfig) -> PyResult<metrics::TestSummary> {
+    py.detach(move || {
+        let url = config.url;
+        let timeout_secs = config.timeout_secs;
+        let chaos = ChaosEngine::new(config.chaos, config.chaos_rate);
+        let no_progress = config.no_progress;
+
+        let method = parse_method(&config.method)?;
+        let body = parse_body(config.body);
+        let mut header_map = parse_headers(config.headers)?;
+
+        if body.is_some() && !header_map.contains_key(CONTENT_TYPE) {
+            header_map.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
         }
 
-        Ok(result)
+        let strategy = ConcurrencyStrategy::Constant {
+            concurrency: config.concurrency,
+            duration_secs: config.duration_secs,
+        };
+
+        let rt = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+
+        rt.block_on(execute_test(
+            url,
+            timeout_secs,
+            method,
+            body,
+            header_map,
+            chaos,
+            no_progress,
+            strategy,
+        ))
     })
 }
 
@@ -270,208 +408,37 @@ fn run_load_profiles(
     headers: Option<Vec<(String, String)>>,
 ) -> PyResult<metrics::TestSummary> {
     py.detach(move || {
-        let max_concurrency = profile.max_concurrency();
-        let total_duration_secs = profile.total_duration();
         let chaos_engine = ChaosEngine::new(chaos, chaos_rate);
 
-        // Parse and validate HTTP method, body, headers before test starts
         let method = parse_method(method)?;
         let body = parse_body(body);
         let mut header_map = parse_headers(headers)?;
 
-        // Auto-insert Content-Type when body is present
         if body.is_some() && !header_map.contains_key(CONTENT_TYPE) {
             header_map.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
         }
 
-        tracing::info!(
-            url,
-            timeout_secs,
-            max_concurrency,
-            total_duration_secs,
-            method = %method,
-            chaos,
-            "starting profile load test"
-        );
+        let strategy = ConcurrencyStrategy::Dynamic { profile };
 
         let rt = tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .build()
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
 
-        let client = build_client(max_concurrency, timeout_secs, header_map)
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-
-        // Track whether cancellation was triggered by user SIGINT
-        let interrupted = Arc::new(std::sync::atomic::AtomicBool::new(false));
-        let interrupted_check = Arc::clone(&interrupted);
-
-        let result = rt.block_on(async move {
-            tracing::debug!("http client created");
-
-            let counters = Arc::new(LiveCounters::new());
-            let total_duration = Duration::from_secs(total_duration_secs);
-            let test_start = Instant::now();
-
-            // Top-level cancellation token for SIGINT handling
-            let cancel_token = CancellationToken::new();
-
-            // Spawn SIGINT listener with double Ctrl+C safety hatch
-            let token_clone = cancel_token.clone();
-            let interrupted_clone = interrupted.clone();
-            tokio::spawn(async move {
-                if tokio::signal::ctrl_c().await.is_ok() {
-                    tracing::info!("received SIGINT, initiating graceful shutdown");
-                    interrupted_clone.store(true, Ordering::SeqCst);
-                    token_clone.cancel();
-
-                    if tokio::signal::ctrl_c().await.is_ok() {
-                        tracing::warn!("received second SIGINT, shutdown already in progress");
-                    }
-                }
-            });
-
-            let (tx, rx) = tokio::sync::mpsc::channel::<RequestMetric>(METRIC_CHANNEL_BUFFER);
-
-            let aggregator = tokio::spawn(async move {
-                let mut latencies = Vec::new();
-                let mut rx = rx;
-                while let Some(metric) = rx.recv().await {
-                    latencies.push(metric.latency_micros);
-                }
-                latencies
-            });
-
-            // Spawn progress render task (only on TTY when enabled)
-            let use_progress = !no_progress && std::io::stderr().is_terminal();
-            let pb = if use_progress {
-                Some(progress::create_progress_bar(total_duration))
-            } else {
-                None
-            };
-            let render_handle = pb.as_ref().map(|pb| {
-                tokio::spawn(progress::render_loop(
-                    pb.clone(),
-                    Arc::clone(&counters),
-                    test_start,
-                    total_duration,
-                    cancel_token.clone(),
-                ))
-            });
-
-            let counters_clone = Arc::clone(&counters);
-            let client_clone = client.clone();
-            let url_clone = url.clone();
-            let cancel_clone = cancel_token.clone();
-
-            let supervisor = tokio::spawn(async move {
-                let mut child_tokens: Vec<CancellationToken> = Vec::new();
-                let mut handles: Vec<tokio::task::JoinHandle<()>> = Vec::new();
-                let mut reaped_handles: Vec<tokio::task::JoinHandle<()>> = Vec::new();
-                let mut current_concurrency = 0usize;
-                let start = Instant::now();
-
-                loop {
-                    let elapsed = start.elapsed();
-                    if elapsed >= total_duration || cancel_clone.is_cancelled() {
-                        break;
-                    }
-
-                    let target = profile.target_concurrency(elapsed);
-
-                    while current_concurrency < target {
-                        let child_token = CancellationToken::new();
-                        let remaining = total_duration.saturating_sub(elapsed);
-                        let handle = tokio::spawn(worker::worker_loop(
-                            client_clone.clone(),
-                            url_clone.clone(),
-                            method.clone(),
-                            body.clone(),
-                            Arc::clone(&counters_clone),
-                            tx.clone(),
-                            remaining,
-                            child_token.clone(),
-                            chaos_engine,
-                        ));
-                        child_tokens.push(child_token);
-                        handles.push(handle);
-                        current_concurrency += 1;
-                    }
-
-                    while current_concurrency > target {
-                        if let Some(token) = child_tokens.pop() {
-                            token.cancel();
-                            if let Some(handle) = handles.pop() {
-                                reaped_handles.push(handle);
-                            }
-                            current_concurrency -= 1;
-                        }
-                    }
-
-                    // Join reaped workers concurrently
-                    for handle in reaped_handles.drain(..) {
-                        if let Err(e) = handle.await {
-                            tracing::debug!(error = %e, "cancelled worker panicked during shutdown");
-                        }
-                    }
-
-                    tracing::debug!(current_concurrency, target, "supervisor tick");
-
-                    tokio::time::sleep(Duration::from_millis(SUPERVISOR_TICK_MS)).await;
-                }
-
-                for token in child_tokens {
-                    token.cancel();
-                }
-                for handle in handles {
-                    if let Err(e) = handle.await {
-                        tracing::warn!(error = %e, "worker task panicked");
-                    }
-                }
-
-                drop(tx);
-            });
-
-            supervisor
-                .await
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-
-            // Wait for render task to finish naturally
-            #[allow(clippy::collapsible_if)]
-            if let Some(handle) = render_handle {
-                if let Err(e) = handle.await {
-                    tracing::debug!(error = %e, "render task panicked");
-                }
-            }
-
-            let latencies = aggregator
-                .await
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-
-            let total = counters.total_requests.load(Ordering::Relaxed);
-            let errors = counters.errors.load(Ordering::Relaxed);
-
-            tracing::info!(total, errors, "profile load test completed");
-
-            Ok::<metrics::TestSummary, pyo3::PyErr>(metrics::calculate_summary(
-                total, errors, latencies,
-            ))
-        })?;
-
-        // If SIGINT was received, raise KeyboardInterrupt to Python
-        if interrupted_check.load(Ordering::SeqCst) {
-            return Err(pyo3::exceptions::PyKeyboardInterrupt::new_err(
-                "load test interrupted by user",
-            ));
-        }
-
-        Ok(result)
+        rt.block_on(execute_test(
+            url,
+            timeout_secs,
+            method,
+            body,
+            header_map,
+            chaos_engine,
+            no_progress,
+            strategy,
+        ))
     })
 }
 
-/// A Python module implemented in Rust. The name of this module must match
-/// the `lib.name` setting in the `Cargo.toml`, else Python will not be able to
-/// import the module.
+/// A Python module implemented in Rust.
 #[pymodule]
 fn _strobengine(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(init_logging, m)?)?;
