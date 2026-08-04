@@ -53,6 +53,7 @@ engine = StrobEngine.stress_test(
     "http://localhost:8080/api/health",
     start_concurrency=10, max_concurrency=200,
     ramp_duration=60, hold_duration=30,
+    headers=[("Authorization", "Bearer token123")],
 )
 summary = engine.run()
 
@@ -63,6 +64,7 @@ engine = StrobEngine.spike_test(
     "http://localhost:8080/api/health",
     baseline=5, peak_concurrency=500,
     pre_spike_duration=5, spike_duration=10, post_spike_duration=5,
+    headers=[("X-Custom", "value")],
 )
 summary = engine.run()
 
@@ -108,6 +110,12 @@ strobengine load http://localhost:8080/api/data --method POST --body '{"key": "v
 # PUT with custom headers
 strobengine load http://localhost:8080/api/resource/1 \
   --method PUT --body '{"name": "updated"}' --header "Authorization: Bearer token"
+
+# Multiple headers (repeatable -H flag)
+strobengine load http://localhost:8080/api/data \
+  --method POST --body '{"key": "val"}' \
+  --header "Authorization: Bearer token" \
+  --header "X-Request-ID: abc-123"
 
 # DELETE
 strobengine load http://localhost:8080/api/resource/1 --method DELETE
