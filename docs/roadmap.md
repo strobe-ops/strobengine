@@ -29,7 +29,7 @@ This document outlines the planned trajectory and upcoming feature epics for **s
 ### Epic: HTTP Customization
 *Target Focus: Feature Completeness*
 
-- [ ] Custom HTTP Headers support (authentication, user-agents, metadata).
+- [x] Custom HTTP Headers support (authentication, user-agents, metadata). `[v0.2.0]`
 - [ ] Dynamic & static Request Payloads (`POST`/`PUT`/`PATCH` body support with JSON/Form Data).
 - [x] Support for all standard HTTP methods (`GET`, `POST`, `PUT`, `DELETE`, `PATCH`, `HEAD`, `OPTIONS`). `[v0.2.0]`
 
