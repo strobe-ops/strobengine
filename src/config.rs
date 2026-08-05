@@ -25,6 +25,8 @@ pub struct TestConfig {
     #[pyo3(get, set)]
     pub body: Option<String>,
     #[pyo3(get, set)]
+    pub form: Option<Vec<(String, String)>>,
+    #[pyo3(get, set)]
     pub headers: Option<Vec<(String, String)>>,
 }
 
@@ -41,6 +43,7 @@ impl TestConfig {
         no_progress=false,
         method="GET",
         body=None,
+        form=None,
         headers=None,
     ))]
     #[allow(clippy::too_many_arguments)]
@@ -54,6 +57,7 @@ impl TestConfig {
         no_progress: bool,
         method: &str,
         body: Option<String>,
+        form: Option<Vec<(String, String)>>,
         headers: Option<Vec<(String, String)>>,
     ) -> Self {
         Self {
@@ -66,6 +70,7 @@ impl TestConfig {
             no_progress,
             method: method.to_string(),
             body,
+            form,
             headers,
         }
     }
@@ -222,6 +227,7 @@ mod tests {
             "GET",
             None,
             None,
+            None,
         );
         assert_eq!(c.url, "http://127.0.0.1:8080");
         assert_eq!(c.concurrency, 10);
@@ -247,6 +253,7 @@ mod tests {
             false,
             "POST",
             Some(r#"{"key":"val"}"#.into()),
+            None,
             Some(headers),
         );
         assert_eq!(c.url, "http://127.0.0.1:8080");
@@ -271,6 +278,7 @@ mod tests {
             0.1,
             false,
             "GET",
+            None,
             None,
             None,
         );
