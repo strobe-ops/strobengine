@@ -74,6 +74,17 @@ fn parse_body(body: Option<String>) -> Option<bytes::Bytes> {
     body.map(bytes::Bytes::from)
 }
 
+fn parse_form(form: Option<Vec<(String, String)>>) -> Option<bytes::Bytes> {
+    form.map(|pairs| {
+        let encoded: String = pairs
+            .iter()
+            .map(|(k, v)| format!("{}={}", urlencoding::encode(k), urlencoding::encode(v)))
+            .collect::<Vec<_>>()
+            .join("&");
+        bytes::Bytes::from(encoded)
+    })
+}
+
 fn parse_headers(headers: Option<Vec<(String, String)>>) -> PyResult<HeaderMap> {
     let mut header_map = HeaderMap::new();
 
@@ -353,10 +364,29 @@ fn run_load_test(py: Python<'_>, config: TestConfig) -> PyResult<metrics::TestSu
 
         let method = parse_method(&config.method)?;
         let body = parse_body(config.body);
+        let form = parse_form(config.form);
         let mut header_map = parse_headers(config.headers)?;
 
-        if body.is_some() && !header_map.contains_key(CONTENT_TYPE) {
-            header_map.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+        // Resolve payload and auto-inject Content-Type
+        let is_form = form.is_some();
+        let final_body = if form.is_some() {
+            if body.is_some() {
+                return Err(pyo3::exceptions::PyValueError::new_err(
+                    "Cannot specify both --body and --form simultaneously",
+                ));
+            }
+            form
+        } else {
+            body
+        };
+
+        if final_body.is_some() && !header_map.contains_key(CONTENT_TYPE) {
+            let ct = if is_form {
+                "application/x-www-form-urlencoded"
+            } else {
+                "application/json"
+            };
+            header_map.insert(CONTENT_TYPE, HeaderValue::from_static(ct));
         }
 
         let strategy = ConcurrencyStrategy::Constant {
@@ -373,7 +403,7 @@ fn run_load_test(py: Python<'_>, config: TestConfig) -> PyResult<metrics::TestSu
             url,
             timeout_secs,
             method,
-            body,
+            final_body,
             header_map,
             chaos,
             no_progress,
@@ -392,6 +422,7 @@ fn run_load_test(py: Python<'_>, config: TestConfig) -> PyResult<metrics::TestSu
     no_progress=false,
     method="GET",
     body=None,
+    form=None,
     headers=None,
 ))]
 #[allow(clippy::too_many_arguments)]
@@ -405,17 +436,37 @@ fn run_load_profiles(
     no_progress: bool,
     method: &str,
     body: Option<String>,
+    form: Option<Vec<(String, String)>>,
     headers: Option<Vec<(String, String)>>,
 ) -> PyResult<metrics::TestSummary> {
     py.detach(move || {
         let chaos_engine = ChaosEngine::new(chaos, chaos_rate);
 
         let method = parse_method(method)?;
-        let body = parse_body(body);
+        let raw_body = parse_body(body);
+        let raw_form = parse_form(form);
         let mut header_map = parse_headers(headers)?;
 
-        if body.is_some() && !header_map.contains_key(CONTENT_TYPE) {
-            header_map.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+        // Resolve payload and auto-inject Content-Type
+        let is_form = raw_form.is_some();
+        let final_body = if raw_form.is_some() {
+            if raw_body.is_some() {
+                return Err(pyo3::exceptions::PyValueError::new_err(
+                    "Cannot specify both --body and --form simultaneously",
+                ));
+            }
+            raw_form
+        } else {
+            raw_body
+        };
+
+        if final_body.is_some() && !header_map.contains_key(CONTENT_TYPE) {
+            let ct = if is_form {
+                "application/x-www-form-urlencoded"
+            } else {
+                "application/json"
+            };
+            header_map.insert(CONTENT_TYPE, HeaderValue::from_static(ct));
         }
 
         let strategy = ConcurrencyStrategy::Dynamic { profile };
@@ -429,7 +480,7 @@ fn run_load_profiles(
             url,
             timeout_secs,
             method,
-            body,
+            final_body,
             header_map,
             chaos_engine,
             no_progress,

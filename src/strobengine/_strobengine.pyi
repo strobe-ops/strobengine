@@ -30,6 +30,7 @@ class TestConfig:
     no_progress: bool
     method: str
     body: str | None
+    form: list[tuple[str, str]] | None
     headers: list[tuple[str, str]] | None
     def __init__(
         self,
@@ -42,6 +43,7 @@ class TestConfig:
         no_progress: bool = False,
         method: str = "GET",
         body: str | None = None,
+        form: list[tuple[str, str]] | None = None,
         headers: list[tuple[str, str]] | None = None,
     ) -> None: ...
 
@@ -68,5 +70,6 @@ def run_load_profiles(
     no_progress: bool = False,
     method: str = "GET",
     body: str | None = None,
+    form: list[tuple[str, str]] | None = None,
     headers: list[tuple[str, str]] | None = None,
 ) -> TestSummary: ...

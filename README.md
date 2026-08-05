@@ -117,6 +117,10 @@ strobengine load http://localhost:8080/api/data \
   --header "Authorization: Bearer token" \
   --header "X-Request-ID: abc-123"
 
+# POST with URL-encoded form data
+strobengine load http://localhost:8080/api/data \
+  --method POST --form "key1=value1&key2=value2"
+
 # DELETE
 strobengine load http://localhost:8080/api/resource/1 --method DELETE
 
@@ -146,6 +150,7 @@ By default, this spawns **10 concurrent workers** for **10 seconds** with a **10
 | `-t`, `--timeout` | `10` | Per-request timeout in seconds |
 | `--method` | `GET` | HTTP method (GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS) |
 | `--body` | none | Request body (raw string) |
+| `--form` | none | Form data body (e.g. key1=val1&key2=val2) |
 | `--header` | none | Custom header key:value (repeatable) |
 | `--chaos` | off | Enable fault injection (~10% of requests) |
 | `--no-progress` | off | Suppress live progress bar |
@@ -165,6 +170,7 @@ By default, this spawns **10 concurrent workers** for **10 seconds** with a **10
 | `-t`, `--timeout` | `10` | Per-request timeout in seconds |
 | `--method` | `GET` | HTTP method (GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS) |
 | `--body` | none | Request body (raw string) |
+| `--form` | none | Form data body (e.g. key1=val1&key2=val2) |
 | `--header` | none | Custom header key:value (repeatable) |
 | `--chaos` | off | Enable fault injection (~10% of requests) |
 | `--no-progress` | off | Suppress live progress bar |
@@ -185,6 +191,7 @@ By default, this spawns **10 concurrent workers** for **10 seconds** with a **10
 | `-t`, `--timeout` | `10` | Per-request timeout in seconds |
 | `--method` | `GET` | HTTP method (GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS) |
 | `--body` | none | Request body (raw string) |
+| `--form` | none | Form data body (e.g. key1=val1&key2=val2) |
 | `--header` | none | Custom header key:value (repeatable) |
 | `--chaos` | off | Enable fault injection (~10% of requests) |
 | `--no-progress` | off | Suppress live progress bar |

@@ -33,6 +33,7 @@ class RequestOptions:
     no_progress: bool = False
     method: str = "GET"
     body: str | None = None
+    form: list[tuple[str, str]] | None = None
     headers: list[tuple[str, str]] = field(default_factory=list)
 
     def __post_init__(self) -> None:
@@ -68,6 +69,7 @@ class StrobEngine:
                 no_progress=self._options.no_progress,
                 method=self._options.method,
                 body=self._options.body,
+                form=self._options.form,
                 headers=self._options.headers,
             )
             self._profile = None
@@ -168,6 +170,7 @@ class StrobEngine:
                 no_progress=opts.no_progress,
                 method=opts.method,
                 body=opts.body,
+                form=opts.form,
                 headers=opts.headers,
             )
         return run_load_test(self.config)

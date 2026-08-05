@@ -76,6 +76,20 @@ def _parse_headers(header: list[str] | None) -> list[tuple[str, str]] | None:
     return parsed_headers
 
 
+def _parse_form(form_str: str | None) -> list[tuple[str, str]] | None:
+    """Parses a URL-encoded form string (e.g. 'key1=val1&key2=val2') into key-value pairs."""
+    if not form_str:
+        return None
+    pairs = []
+    for item in form_str.split("&"):
+        if "=" in item:
+            k, v = item.split("=", 1)
+            pairs.append((k, v))
+        elif item:
+            pairs.append((item, ""))
+    return pairs or None
+
+
 def _validate_method(method: str) -> str:
     """Normalizes and validates the HTTP method against supported verbs."""
     upper_method = method.strip().upper()
@@ -160,6 +174,10 @@ def load(
     body: Annotated[
         str | None, typer.Option("--body", help="Request body (raw string)")
     ] = None,
+    form: Annotated[
+        str | None,
+        typer.Option("--form", help="Form data body (e.g. key1=val1&key2=val2)"),
+    ] = None,
     header: Annotated[
         list[str] | None,
         typer.Option("--header", help="Custom header key:value (repeatable)"),
@@ -186,7 +204,6 @@ def load(
 ) -> None:
     _configure_logging(_resolve_log_level(verbose, quiet), log_file)
     method = _validate_method(method)
-
     engine = StrobEngine.load_test(
         url=url,
         concurrency=concurrency,
@@ -197,6 +214,7 @@ def load(
             no_progress=no_progress,
             method=method,
             body=body,
+            form=_parse_form(form),
             headers=_parse_headers(header),
         ),
     )
@@ -237,6 +255,10 @@ def stress(
     body: Annotated[
         str | None, typer.Option("--body", help="Request body (raw string)")
     ] = None,
+    form: Annotated[
+        str | None,
+        typer.Option("--form", help="Form data body (e.g. key1=val1&key2=val2)"),
+    ] = None,
     header: Annotated[
         list[str] | None,
         typer.Option("--header", help="Custom header key:value (repeatable)"),
@@ -263,7 +285,6 @@ def stress(
 ) -> None:
     _configure_logging(_resolve_log_level(verbose, quiet), log_file)
     method = _validate_method(method)
-
     engine = StrobEngine.stress_test(
         url=url,
         start_concurrency=start,
@@ -276,6 +297,7 @@ def stress(
             no_progress=no_progress,
             method=method,
             body=body,
+            form=_parse_form(form),
             headers=_parse_headers(header),
         ),
     )
@@ -320,6 +342,10 @@ def spike(
     body: Annotated[
         str | None, typer.Option("--body", help="Request body (raw string)")
     ] = None,
+    form: Annotated[
+        str | None,
+        typer.Option("--form", help="Form data body (e.g. key1=val1&key2=val2)"),
+    ] = None,
     header: Annotated[
         list[str] | None,
         typer.Option("--header", help="Custom header key:value (repeatable)"),
@@ -346,7 +372,6 @@ def spike(
 ) -> None:
     _configure_logging(_resolve_log_level(verbose, quiet), log_file)
     method = _validate_method(method)
-
     engine = StrobEngine.spike_test(
         url=url,
         baseline=baseline,
@@ -360,6 +385,7 @@ def spike(
             no_progress=no_progress,
             method=method,
             body=body,
+            form=_parse_form(form),
             headers=_parse_headers(header),
         ),
     )
@@ -374,7 +400,7 @@ def _first_positional(argv: list[str]) -> str | None:
             skip_next = False
             continue
         if arg.startswith("-"):
-            if arg in ("--log-file", "--header"):
+            if arg in ("--log-file", "--header", "--form"):
                 skip_next = True
             continue
         return arg
