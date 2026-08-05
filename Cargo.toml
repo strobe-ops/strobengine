@@ -22,5 +22,6 @@ tokio-util = { version = "0.7", features = ["rt"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "registry"] }
 mimalloc = "0.1.52"
+urlencoding = "2"
 fastrand = "2.5"
 indicatif = "0.18.6"
