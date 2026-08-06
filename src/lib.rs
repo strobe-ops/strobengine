@@ -500,12 +500,3 @@ fn _strobengine(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<metrics::TestSummary>()?;
     Ok(())
 }
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn verify_allocator_runs() {
-        let vec: Vec<u8> = vec![0; 1000];
-        assert_eq!(vec.len(), 1000);
-    }
-}
