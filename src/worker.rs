@@ -135,6 +135,7 @@ pub async fn worker_loop(
             }
         };
 
+        // Fallback to u64::MAX (effectively infinity) to prevent overflow on extreme or hanging durations
         let latency_micros = u64::try_from(req_start.elapsed().as_micros()).unwrap_or(u64::MAX);
 
         if tracing::enabled!(tracing::Level::TRACE) {
