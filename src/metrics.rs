@@ -5,11 +5,8 @@ use pyo3::prelude::*;
 /// Conversion factor from microseconds to milliseconds (1 ms = 1,000 us).
 pub const MICROS_PER_MILLI: f64 = 1_000.0;
 
-#[allow(dead_code)]
 pub struct RequestMetric {
-    pub status_code: u16,
     pub latency_micros: u128,
-    pub is_error: bool,
 }
 
 pub struct LiveCounters {
