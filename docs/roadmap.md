@@ -13,6 +13,17 @@ This document outlines the planned trajectory and upcoming feature epics for **s
 - [x] Basic CLI flags (`-c`, `-d`, target URL). `[v0.1.0]`
 - [x] Initial benchmark suite against k6. `[v0.1.0]`
 
+---
+
+### Epic: Binary Distribution & PyPI Publishing
+*Target Focus: Packaging & Ecosystem Delivery*
+
+- [x] Standalone binary compilation/build matrix for main target architectures. `[v0.1.0]`
+- [x] PyPI package publishing workflow (`pip install strobengine`). `[v0.1.0]`
+- [x] GitHub Actions release pipeline for automatic binaries attachment on tag creation. `[v0.1.0]`
+
+---
+
 ### Epic: Fault Injection & Resilience Testing (Chaos)
 
 - [x] Basic chaos testing support. `[v0.2.0]`
@@ -30,7 +41,7 @@ This document outlines the planned trajectory and upcoming feature epics for **s
 *Target Focus: Feature Completeness*
 
 - [x] Custom HTTP Headers support (authentication, user-agents, metadata). `[v0.2.0]`
-- [ ] Dynamic & static Request Payloads (`POST`/`PUT`/`PATCH` body support with JSON/Form Data).
+- [x] Dynamic & static Request Payloads (`POST`/`PUT`/`PATCH` body support with JSON/Form Data). `[v0.2.0]`
 - [x] Support for all standard HTTP methods (`GET`, `POST`, `PUT`, `DELETE`, `PATCH`, `HEAD`, `OPTIONS`). `[v0.2.0]`
 
 ---
@@ -41,15 +52,6 @@ This document outlines the planned trajectory and upcoming feature epics for **s
 - [ ] E2E integration tests against mock HTTP targets (error scenarios, timeouts, high concurrency).
 - [ ] Benchmarking and performance regression tests in CI pipeline.
 - [ ] Automated cross-platform CLI verification (Linux, macOS, Windows).
-
----
-
-### Epic: Binary Distribution & PyPI Publishing
-*Target Focus: Packaging & Ecosystem Delivery*
-
-- [ ] Standalone binary compilation/build matrix for main target architectures.
-- [ ] PyPI package publishing workflow (`pip install strobengine`).
-- [ ] GitHub Actions release pipeline for automatic binaries attachment on tag creation.
 
 ---
 
