@@ -184,7 +184,7 @@ async fn execute_test(
     // Spawn progress render task (only on TTY when enabled)
     let use_progress = !no_progress && std::io::stderr().is_terminal();
     let pb = if use_progress {
-        Some(progress::create_progress_bar(total_duration))
+        Some(progress::create_progress_bar())
     } else {
         None
     };

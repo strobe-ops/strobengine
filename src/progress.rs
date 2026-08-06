@@ -13,7 +13,7 @@ const RENDER_LOOP_SLEEP_MS: u64 = 200;
 /// Indicatif progress bar total resolution ticks.
 const PROGRESS_BAR_MAX_TICKS: u64 = 100;
 
-pub fn create_progress_bar(_total_duration: Duration) -> ProgressBar {
+pub fn create_progress_bar() -> ProgressBar {
     let pb = ProgressBar::new(PROGRESS_BAR_MAX_TICKS);
     pb.set_style(
         ProgressStyle::with_template(
