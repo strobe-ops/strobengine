@@ -268,13 +268,14 @@ uv run pytest -v
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feat/my-feature`)
-3. Make your changes
-4. Run formatting, linting, and tests:
+3. Install dependencies and set up pre-push Git hooks:
    ```bash
-   cargo fmt
-   cargo clippy --all-targets -- -D warnings
-   cargo test
-   uv run pytest -v
+   uv sync
+   uv run pre-commit install --hook-type pre-push
+   ```
+4. Run formatting, linting, and tests manually (or let git push run them automatically):
+   ```bash
+   make check
    ```
 5. Commit your changes following [Conventional Commits](https://www.conventionalcommits.org/)
 6. Push to your branch and open a Pull Request
