@@ -5,6 +5,8 @@ import sys
 from typing import Annotated
 
 import typer
+from typer.core import TyperOption
+from typer.main import get_command
 
 from strobengine._strobengine import TestSummary, init_logging
 from strobengine.engine import RequestOptions, StrobEngine
@@ -88,6 +90,17 @@ def _parse_form(form_str: str | None) -> list[tuple[str, str]] | None:
         elif item:
             pairs.append((item, ""))
     return pairs or None
+
+
+def _collect_value_flags(app: typer.Typer) -> set[str]:
+    """Build the set of flags that consume the next argument."""
+    root = get_command(app)
+    flags: set[str] = set()
+    for cmd in root.commands.values():
+        for param in cmd.params:
+            if isinstance(param, TyperOption) and not param.is_flag and not param.count:
+                flags.update(param.opts)
+    return flags
 
 
 def _validate_method(method: str) -> str:
@@ -393,6 +406,9 @@ def spike(
     _output_results(summary, url, pre_spike + spike_duration + post_spike, json_output)
 
 
+_VALUE_FLAGS: set[str] = _collect_value_flags(app)
+
+
 def _first_positional(argv: list[str]) -> str | None:
     skip_next = False
     for arg in argv:
@@ -400,7 +416,7 @@ def _first_positional(argv: list[str]) -> str | None:
             skip_next = False
             continue
         if arg.startswith("-"):
-            if arg in ("--log-file", "--header", "--form"):
+            if arg in _VALUE_FLAGS:
                 skip_next = True
             continue
         return arg
