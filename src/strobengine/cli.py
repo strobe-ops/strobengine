@@ -39,12 +39,15 @@ def _resolve_log_level(verbose_count: int, quiet: bool) -> str:
 def _configure_logging(level: str, log_file: str | None = None) -> None:
     import logging
 
+    TRACE = 5
+    logging.addLevelName(TRACE, "TRACE")
+
     python_level = {
         "off": logging.CRITICAL + 1,
         "warn": logging.WARNING,
         "info": logging.INFO,
         "debug": logging.DEBUG,
-        "trace": logging.DEBUG,
+        "trace": TRACE,
     }.get(level, logging.WARNING)
 
     handlers: list[logging.Handler] = [logging.StreamHandler(sys.stderr)]
