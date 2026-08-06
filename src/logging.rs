@@ -6,7 +6,10 @@ static INIT_LOGGING: Once = Once::new();
 
 pub fn init_tracing(level_str: &str, log_file: Option<&str>) {
     INIT_LOGGING.call_once(|| {
-        let filter = EnvFilter::try_new(level_str).unwrap_or_else(|_| EnvFilter::new("warn"));
+        let filter = EnvFilter::try_new(level_str).unwrap_or_else(|e| {
+            eprintln!("strobengine: invalid log filter '{level_str}', falling back to warn: {e}");
+            EnvFilter::new("warn")
+        });
 
         let stderr_layer = fmt::layer()
             .with_writer(std::io::stderr)
