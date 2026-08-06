@@ -16,17 +16,24 @@ pub fn init_tracing(level_str: &str, log_file: Option<&str>) {
             .with_target(false)
             .compact();
 
-        if let Some(path) = log_file
-            && let Ok(file) = std::fs::File::create(path)
-        {
-            let file_layer = fmt::layer().with_writer(file).with_target(true).compact();
+        if let Some(path) = log_file {
+            match std::fs::File::create(path) {
+                Ok(file) => {
+                    let file_layer = fmt::layer().with_writer(file).with_target(true).compact();
 
-            tracing_subscriber::registry()
-                .with(filter)
-                .with(stderr_layer)
-                .with(file_layer)
-                .init();
-            return;
+                    tracing_subscriber::registry()
+                        .with(filter)
+                        .with(stderr_layer)
+                        .with(file_layer)
+                        .init();
+                    return;
+                }
+                Err(e) => {
+                    eprintln!(
+                        "strobengine: failed to create log file '{path}': {e}, logging to stderr only"
+                    );
+                }
+            }
         }
 
         tracing_subscriber::registry()
