@@ -109,7 +109,7 @@ pub async fn worker_loop(
         };
 
         // Race request against cancellation — abandon stuck requests instantly
-        let (status_code, is_error) = tokio::select! {
+        let status_code = tokio::select! {
             _ = token.cancelled() => {
                 tracing::debug!("worker cancelled, abandoning in-flight request");
                 break;
@@ -124,12 +124,12 @@ pub async fn worker_loop(
                             counters.errors.fetch_add(1, Ordering::Relaxed);
                             tracing::debug!(status_code = code, "non-success HTTP status");
                         }
-                        (code, errored)
+                        code
                     }
                     Err(_) => {
                         counters.errors.fetch_add(1, Ordering::Relaxed);
                         tracing::debug!("request failed");
-                        (0, true)
+                        0
                     }
                 }
             }
@@ -152,9 +152,7 @@ pub async fn worker_loop(
         counters.latency_count.fetch_add(1, Ordering::Relaxed);
 
         let metric = RequestMetric {
-            status_code,
             latency_micros: latency_micros as u128,
-            is_error,
         };
 
         let _ = tx.send(metric).await;
