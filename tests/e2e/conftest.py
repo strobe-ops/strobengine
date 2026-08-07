@@ -1,20 +1,46 @@
+import asyncio
 import shutil
+import socket
 import sys
+import threading
 from pathlib import Path
 
 import pytest
-from aiohttp.test_utils import TestServer
+from aiohttp import web
 
 from .mock_server import create_app
 
 
+def _free_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
 @pytest.fixture(scope="session")
-async def mock_server():
+def mock_server():
+    port = _free_port()
     app = create_app()
-    server = TestServer(app)
-    await server.start_server()
-    yield f"http://127.0.0.1:{server.port}"
-    await server.close()
+    loop = asyncio.new_event_loop()
+
+    runner = web.AppRunner(app)
+
+    def _run():
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(runner.setup())
+        site = web.TCPSite(runner, "127.0.0.1", port)
+        loop.run_until_complete(site.start())
+        loop.run_forever()
+
+    thread = threading.Thread(target=_run, daemon=True)
+    thread.start()
+
+    yield f"http://127.0.0.1:{port}"
+
+    loop.call_soon_threadsafe(loop.stop)
+    thread.join(timeout=5)
+    loop.run_until_complete(runner.cleanup())
+    loop.close()
 
 
 def _find_cli_bin() -> str:

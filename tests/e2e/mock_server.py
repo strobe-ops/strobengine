@@ -1,6 +1,12 @@
+from __future__ import annotations
+
 import asyncio
+from typing import Any
 
 from aiohttp import web
+
+LAST_ECHO_KEY: web.AppKey[dict[str, Any]] = web.AppKey("last_echo")
+FLAKY_STATE_KEY: web.AppKey[dict[str, bool]] = web.AppKey("flaky_state")
 
 
 async def handle_status(request: web.Request) -> web.Response:
@@ -28,18 +34,24 @@ async def handle_echo(request: web.Request) -> web.Response:
         if raw:
             body = raw.decode("utf-8", errors="replace")
 
-    return web.json_response(
-        {
-            "method": request.method,
-            "headers": dict(request.headers),
-            "body": body,
-        }
-    )
+    result = {
+        "method": request.method,
+        "headers": {k.lower(): v for k, v in request.headers.items()},
+        "body": body,
+    }
+    request.app[LAST_ECHO_KEY]["value"] = result
+
+    return web.json_response(result)
+
+
+async def handle_last_echo(request: web.Request) -> web.Response:
+    return web.json_response(request.app[LAST_ECHO_KEY].get("value") or {})
 
 
 async def handle_flaky(request: web.Request) -> web.Response:
-    current = request.app["flaky_state"]
-    request.app["flaky_state"] = not current
+    state = request.app[FLAKY_STATE_KEY]
+    current = state["value"]
+    state["value"] = not current
     if current:
         return web.Response(status=200, text="ok")
     return web.Response(status=500, text="internal error")
@@ -47,8 +59,10 @@ async def handle_flaky(request: web.Request) -> web.Response:
 
 def create_app() -> web.Application:
     app = web.Application()
-    app["flaky_state"] = False
+    app[LAST_ECHO_KEY] = {}
+    app[FLAKY_STATE_KEY] = {"value": False}
     app.router.add_route("*", "/echo", handle_echo)
+    app.router.add_get("/last-echo", handle_last_echo)
     app.router.add_get("/status/{code}", handle_status)
     app.router.add_get("/delay/{seconds}", handle_delay)
     app.router.add_get("/flaky", handle_flaky)
