@@ -254,15 +254,8 @@ The Python GIL is released entirely via `py.detach()` during test execution, all
 
 ## Testing
 
-Run the full test suite with:
-
-```bash
-# Rust unit tests
-cargo test
-
-# Python unit tests
-uv run pytest -v
-```
+> See [docs/testing.md](docs/testing.md) for the full testing guide, including
+> e2e tests, CI/CD checks, and running individual test suites.
 
 ## How to Contribute
 
